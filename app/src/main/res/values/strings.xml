@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">팝업스쿨</string>
+    <string name="bubble_content_description">팝업스쿨 버블</string>
+    <string name="refresh">새로고침</string>
+    <string name="close">닫기</string>
+    <string name="section_dday">디데이</string>
+    <string name="section_timetable">오늘의 시간표</string>
+    <string name="section_meal">오늘의 급식</string>
+</resources>
