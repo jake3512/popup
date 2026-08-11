@@ -1,11 +1,14 @@
 package com.jake.popupschool.ui.timetable
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -14,16 +17,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +44,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.jake.popupschool.data.settings.SettingsRepository
 import com.jake.popupschool.data.timetable.ManualTimetableEntry
@@ -53,9 +56,10 @@ import com.jake.popupschool.data.timetable.TimetableSubject
 import com.jake.popupschool.data.timetable.TimetableSubjectRepository
 import com.jake.popupschool.domain.model.TimetableSource
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 
 private val DAY_LABELS = listOf("월", "화", "수", "목", "금", "토", "일")
+private val PERIOD_COLUMN_WIDTH = 40.dp
+private val DAY_COLUMN_WIDTH = 60.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,9 +73,9 @@ fun TimetableScreen(onBack: () -> Unit) {
     var source by remember { mutableStateOf(TimetableSource.NEIS) }
     val entries by timetableRepository.entriesFlow.collectAsState(initial = emptyList())
     val subjects by subjectRepository.subjectsFlow.collectAsState(initial = emptyList())
-    var selectedDay by remember { mutableStateOf(LocalDate.now().dayOfWeek.value) }
     var showAddSubjectDialog by remember { mutableStateOf(false) }
-    var showAddPeriodDialog by remember { mutableStateOf(false) }
+    var editingCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var extraPeriodRows by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         source = settingsRepository.current().timetableSource
@@ -82,6 +86,7 @@ fun TimetableScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .padding(padding)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             TextButton(onClick = onBack) { Text("뒤로") }
 
@@ -156,76 +161,40 @@ fun TimetableScreen(onBack: () -> Unit) {
                 }
 
                 Spacer(Modifier.height(16.dp))
-                Text("요일 선택", style = MaterialTheme.typography.titleMedium)
+                Text("시간표", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    DAY_LABELS.forEachIndexed { index, label ->
-                        val dayValue = index + 1
-                        FilterChip(
-                            selected = selectedDay == dayValue,
-                            onClick = { selectedDay = dayValue },
-                            label = { Text(label) }
-                        )
-                    }
-                }
+                Text(
+                    "칸을 눌러 요일·교시별 과목을 지정하세요.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
 
-                Spacer(Modifier.height(12.dp))
-
-                val dayEntries = entries.filter { it.dayOfWeek == selectedDay }.sortedBy { it.period }
-                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                    items(dayEntries, key = { it.id }) { entry ->
-                        val subject = subjects.find { it.id == entry.subjectId }
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (subject?.isMovingClass == true) {
-                                    MaterialTheme.colorScheme.secondaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surface
-                                }
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "${entry.period}교시",
-                                    modifier = Modifier.padding(end = 12.dp)
-                                )
-                                Text(
-                                    subject?.name ?: "(삭제된 과목)",
-                                    modifier = Modifier.weight(1f)
-                                )
-                                if (subject?.isMovingClass == true) {
-                                    Text(
-                                        "이동수업",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.padding(end = 8.dp)
+                val maxPeriod = (entries.maxOfOrNull { it.period } ?: 0).coerceAtLeast(7) + extraPeriodRows
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    Column {
+                        Row {
+                            TableHeaderCell("교시", PERIOD_COLUMN_WIDTH)
+                            DAY_LABELS.forEach { label -> TableHeaderCell(label, DAY_COLUMN_WIDTH) }
+                        }
+                        for (period in 1..maxPeriod) {
+                            Row {
+                                TableHeaderCell(period.toString(), PERIOD_COLUMN_WIDTH)
+                                for (day in 1..7) {
+                                    val entry = entries.find { it.dayOfWeek == day && it.period == period }
+                                    val subject = entry?.let { e -> subjects.find { it.id == e.subjectId } }
+                                    TimetableCell(
+                                        subjectName = subject?.name,
+                                        isMovingClass = subject?.isMovingClass == true,
+                                        onClick = { editingCell = day to period }
                                     )
-                                }
-                                IconButton(onClick = {
-                                    scope.launch { timetableRepository.remove(entry.id) }
-                                }) {
-                                    Icon(Icons.Filled.Delete, contentDescription = "삭제")
                                 }
                             }
                         }
                     }
                 }
-
                 Spacer(Modifier.height(8.dp))
-                FloatingActionButton(onClick = { showAddPeriodDialog = true }) {
-                    Icon(Icons.Filled.Add, contentDescription = "교시 추가")
-                }
+                TextButton(onClick = { extraPeriodRows++ }) { Text("+ 교시 추가") }
             }
         }
     }
@@ -242,21 +211,76 @@ fun TimetableScreen(onBack: () -> Unit) {
         )
     }
 
-    if (showAddPeriodDialog) {
-        val nextPeriod = entries.count { it.dayOfWeek == selectedDay } + 1
-        AddPeriodDialog(
+    editingCell?.let { (day, period) ->
+        val currentEntry = entries.find { it.dayOfWeek == day && it.period == period }
+        EditCellDialog(
+            day = day,
+            period = period,
             subjects = subjects,
-            nextPeriod = nextPeriod,
-            onDismiss = { showAddPeriodDialog = false },
-            onConfirm = { subjectId ->
+            currentSubjectId = currentEntry?.subjectId,
+            onDismiss = { editingCell = null },
+            onSave = { subjectId ->
                 scope.launch {
+                    currentEntry?.let { timetableRepository.remove(it.id) }
                     timetableRepository.add(
-                        ManualTimetableEntry(dayOfWeek = selectedDay, period = nextPeriod, subjectId = subjectId)
+                        ManualTimetableEntry(dayOfWeek = day, period = period, subjectId = subjectId)
                     )
                 }
-                showAddPeriodDialog = false
+                editingCell = null
+            },
+            onRemove = {
+                scope.launch {
+                    currentEntry?.let { timetableRepository.remove(it.id) }
+                }
+                editingCell = null
             }
         )
+    }
+}
+
+@Composable
+private fun TableHeaderCell(text: String, width: Dp) {
+    Box(
+        modifier = Modifier
+            .width(width)
+            .height(32.dp)
+            .padding(1.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun TimetableCell(subjectName: String?, isMovingClass: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .width(DAY_COLUMN_WIDTH)
+            .height(48.dp)
+            .padding(1.dp)
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.small,
+        color = when {
+            isMovingClass -> MaterialTheme.colorScheme.secondaryContainer
+            subjectName != null -> MaterialTheme.colorScheme.surfaceVariant
+            else -> MaterialTheme.colorScheme.surface
+        },
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                subjectName ?: "+",
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                color = if (subjectName == null) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+        }
     }
 }
 
@@ -301,25 +325,22 @@ private fun AddSubjectDialog(onDismiss: () -> Unit, onConfirm: (String, Boolean)
 }
 
 @Composable
-private fun AddPeriodDialog(
+private fun EditCellDialog(
+    day: Int,
+    period: Int,
     subjects: List<TimetableSubject>,
-    nextPeriod: Int,
+    currentSubjectId: String?,
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
+    onSave: (String) -> Unit,
+    onRemove: () -> Unit
 ) {
-    var selectedSubjectId by remember { mutableStateOf(subjects.firstOrNull()?.id) }
+    var selectedSubjectId by remember { mutableStateOf(currentSubjectId ?: subjects.firstOrNull()?.id) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("${nextPeriod}교시 추가") },
+        title = { Text("${DAY_LABELS[day - 1]}요일 ${period}교시") },
         text = {
             Column {
-                Text(
-                    "입력한 순서대로 교시가 매겨집니다. 이번에는 ${nextPeriod}교시로 등록됩니다.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(12.dp))
                 if (subjects.isEmpty()) {
                     Text(
                         "등록된 과목이 없습니다. 먼저 과목을 추가해주세요.",
@@ -327,7 +348,6 @@ private fun AddPeriodDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
-                    Text("과목 선택", style = MaterialTheme.typography.labelLarge)
                     LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
                         items(subjects, key = { it.id }) { subject ->
                             Row(
@@ -358,15 +378,18 @@ private fun AddPeriodDialog(
         confirmButton = {
             TextButton(onClick = {
                 val subjectId = selectedSubjectId
-                if (subjectId != null) {
-                    onConfirm(subjectId)
-                }
+                if (subjectId != null) onSave(subjectId)
             }) {
-                Text("추가")
+                Text("저장")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("취소") }
+            Row {
+                if (currentSubjectId != null) {
+                    TextButton(onClick = onRemove) { Text("삭제") }
+                }
+                TextButton(onClick = onDismiss) { Text("취소") }
+            }
         }
     )
 }

@@ -61,6 +61,22 @@ class SwingHeroView(context: Context) : View(context) {
         if (w <= 0f || h <= 0f) return
 
         velocityY = (velocityY + GRAVITY).coerceAtMost(MAX_FALL_SPEED)
+
+        if (swinging) {
+            val dx = swingAnchorX - posX
+            val dy = swingAnchorY - posY
+            val distance = hypot(dx, dy).coerceAtLeast(1f)
+            velocityX += dx / distance * PULL_STRENGTH
+            velocityY += dy / distance * PULL_STRENGTH
+
+            val speed = hypot(velocityX, velocityY)
+            if (speed > MAX_SPEED) {
+                val scale = MAX_SPEED / speed
+                velocityX *= scale
+                velocityY *= scale
+            }
+        }
+
         posX += velocityX
         posY += velocityY
 
@@ -143,5 +159,7 @@ class SwingHeroView(context: Context) : View(context) {
         const val MAX_FALL_SPEED = 18f
         const val FLOOR_DAMPING = 0.6f
         const val WEB_LAUNCH_SPEED = 15f
+        const val PULL_STRENGTH = 1.1f
+        const val MAX_SPEED = 24f
     }
 }
