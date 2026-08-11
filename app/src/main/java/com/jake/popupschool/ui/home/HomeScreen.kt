@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PauseCircle
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
@@ -38,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,22 +54,85 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
 import com.jake.popupschool.data.dday.DdayRepository
+import com.jake.popupschool.data.remote.NeisClient
+import com.jake.popupschool.data.repository.SchoolDataRepository
 import com.jake.popupschool.data.settings.SettingsRepository
+import com.jake.popupschool.data.timetable.TimetableRepository
+import com.jake.popupschool.data.timetable.TimetableSubjectRepository
+import com.jake.popupschool.domain.model.MealInfo
+import com.jake.popupschool.domain.model.TimetableSlot
+import com.jake.popupschool.domain.model.TimetableSource
 import com.jake.popupschool.overlay.BubbleService
 import com.jake.popupschool.overlay.OverlayPermissionHelper
 import com.jake.popupschool.util.ddayLabel
+import kotlinx.coroutines.flow.first
+import java.time.LocalDate
 
 @Composable
 fun HomeScreen(navController: NavHostController) {
     val context = LocalContext.current
     val settingsRepository = remember { SettingsRepository(context) }
     val ddayRepository = remember { DdayRepository(context) }
+    val timetableRepository = remember { TimetableRepository(context) }
+    val timetableSubjectRepository = remember { TimetableSubjectRepository(context) }
+    val schoolDataRepository = remember { SchoolDataRepository(NeisClient.api) }
 
     val settings by settingsRepository.settingsFlow.collectAsState(initial = null)
     val ddayItems by ddayRepository.itemsFlow.collectAsState(initial = emptyList())
 
     var overlayGranted by remember { mutableStateOf(OverlayPermissionHelper.canDrawOverlays(context)) }
     var bubbleRunning by remember { mutableStateOf(false) }
+
+    var todaySlots by remember { mutableStateOf<List<TimetableSlot>>(emptyList()) }
+    var todayTimetableMessage by remember { mutableStateOf<String?>(null) }
+    var todayMeals by remember { mutableStateOf<List<MealInfo>>(emptyList()) }
+    var todayMealMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(settings) {
+        val current = settings ?: return@LaunchedEffect
+        val today = LocalDate.now()
+
+        if (current.timetableSource == TimetableSource.MANUAL) {
+            val subjects = timetableSubjectRepository.subjectsFlow.first()
+            val slots = timetableRepository.entriesFlow.first()
+                .filter { it.dayOfWeek == today.dayOfWeek.value }
+                .sortedBy { it.period }
+                .mapNotNull { entry ->
+                    val subject = subjects.find { it.id == entry.subjectId } ?: return@mapNotNull null
+                    TimetableSlot(period = entry.period, subject = subject.name, isMovingClass = subject.isMovingClass)
+                }
+            todaySlots = slots
+            todayTimetableMessage = if (slots.isEmpty()) "등록된 시간표가 없습니다." else null
+        } else if (current.isConfigured) {
+            schoolDataRepository.getTimetableForDate(current, today)
+                .onSuccess { slots ->
+                    todaySlots = slots
+                    todayTimetableMessage = if (slots.isEmpty()) "시간표가 없습니다." else null
+                }
+                .onFailure {
+                    todaySlots = emptyList()
+                    todayTimetableMessage = "시간표를 불러오지 못했습니다."
+                }
+        } else {
+            todaySlots = emptyList()
+            todayTimetableMessage = "설정에서 학교 정보를 입력해주세요."
+        }
+
+        if (current.isConfigured) {
+            schoolDataRepository.getMealsForDate(current, today)
+                .onSuccess { meals ->
+                    todayMeals = meals
+                    todayMealMessage = if (meals.isEmpty()) "급식 정보가 없습니다." else null
+                }
+                .onFailure {
+                    todayMeals = emptyList()
+                    todayMealMessage = "급식 정보를 불러오지 못했습니다."
+                }
+        } else {
+            todayMeals = emptyList()
+            todayMealMessage = "설정에서 학교 정보를 입력해주세요."
+        }
+    }
 
     val overlayLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -142,6 +207,94 @@ fun HomeScreen(navController: NavHostController) {
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.secondary
                     )
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(
+                Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.Schedule,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "오늘의 시간표",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (todayTimetableMessage != null) {
+                    Text(
+                        todayTimetableMessage!!,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    todaySlots.forEach { slot ->
+                        Text(
+                            if (slot.isMovingClass) {
+                                "${slot.period}교시  ${slot.subject} (이동수업)"
+                            } else {
+                                "${slot.period}교시  ${slot.subject}"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (slot.isMovingClass) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(
+                Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.Restaurant,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "오늘의 급식",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (todayMealMessage != null) {
+                    Text(
+                        todayMealMessage!!,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    todayMeals.forEach { meal ->
+                        Text(
+                            meal.mealType,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            meal.menuItems.joinToString("\n"),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             }
         }
@@ -235,6 +388,12 @@ fun HomeScreen(navController: NavHostController) {
                 title = "팝업 스타일",
                 subtitle = "프리미엄 · 미니멀 · 다크 · 파스텔",
                 onClick = { navController.navigate("popup_style") }
+            )
+            QuickAccessItem(
+                icon = Icons.Filled.CalendarMonth,
+                title = "공부시간 달력",
+                subtitle = "날짜별 공부시간 확인",
+                onClick = { navController.navigate("study_calendar") }
             )
         }
     }

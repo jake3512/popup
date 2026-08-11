@@ -20,7 +20,7 @@ class StudyTimeRepository(private val context: Context) {
     private val listKey = stringPreferencesKey("study_time_records")
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val recordsFlow: Flow<List<StudyTimeRecord>> = context.studyTimeDataStore.data.map { prefs ->
+    val recordsFlow: Flow<List<StudyTimeRecord>> = context.studyTimeDataStore.data.map { prefs ->
         val raw = prefs[listKey] ?: return@map emptyList()
         runCatching { json.decodeFromString<List<StudyTimeRecord>>(raw) }.getOrDefault(emptyList())
     }
