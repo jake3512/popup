@@ -894,17 +894,17 @@ class BubbleService : Service() {
         meals.forEach { meal ->
             val header = TextView(this)
             header.text = meal.mealType
-            header.textSize = 14f
+            header.textSize = 12f
             header.setTextColor(currentStyle.headerTextColor.toInt())
-            header.setPadding(0, 4, 0, 0)
+            header.setPadding(0, 3, 0, 0)
             header.setTypeface(null, Typeface.BOLD)
             container.addView(header)
 
             val body = TextView(this)
-            body.text = meal.menuItems.joinToString("\n")
-            body.textSize = 13f
+            body.text = meal.menuItems.joinToString(", ")
+            body.textSize = 11f
             body.setTextColor(currentStyle.bodyTextColor.toInt())
-            body.setPadding(0, 2, 0, 4)
+            body.setPadding(0, 1, 0, 3)
             container.addView(body)
         }
     }
