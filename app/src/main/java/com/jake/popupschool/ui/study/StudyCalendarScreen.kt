@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +37,7 @@ import com.jake.popupschool.data.study.StudyTimeRepository
 import java.time.LocalDate
 import java.time.YearMonth
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudyCalendarScreen(onBack: () -> Unit) {
     val context = LocalContext.current
