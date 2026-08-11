@@ -165,7 +165,7 @@
                 android:id="@+id/timerDisplayText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="05:00"
+                android:text="00:00"
                 android:textSize="40sp"
                 android:textStyle="bold"
                 android:textColor="@color/black" />
@@ -177,36 +177,42 @@
                 android:layout_marginTop="16dp">
 
                 <Button
-                    android:id="@+id/timerPreset5Button"
+                    android:id="@+id/timerAdd30SecButton"
                     style="?android:attr/buttonStyleSmall"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="5분" />
+                    android:text="+30초" />
 
                 <Button
-                    android:id="@+id/timerPreset10Button"
+                    android:id="@+id/timerAdd1MinButton"
                     style="?android:attr/buttonStyleSmall"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="10분" />
-
-                <Button
-                    android:id="@+id/timerPreset25Button"
-                    style="?android:attr/buttonStyleSmall"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="25분" />
+                    android:text="+1분" />
             </LinearLayout>
 
-            <Button
-                android:id="@+id/timerStopButton"
-                style="?android:attr/buttonStyleSmall"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="정지" />
+                android:orientation="horizontal"
+                android:layout_marginTop="12dp">
+
+                <Button
+                    android:id="@+id/timerStartButton"
+                    style="?android:attr/buttonStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="시작" />
+
+                <Button
+                    android:id="@+id/timerStopButton"
+                    style="?android:attr/buttonStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="정지" />
+            </LinearLayout>
         </LinearLayout>
 
         <FrameLayout
