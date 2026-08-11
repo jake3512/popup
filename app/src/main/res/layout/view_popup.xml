@@ -9,6 +9,7 @@
     android:padding="16dp">
 
     <LinearLayout
+        android:id="@+id/popupTitleBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -95,7 +96,7 @@
         <Button
             android:id="@+id/studyTimeToggleButton"
             style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content"
+            android:layout_width="80dp"
             android:layout_height="wrap_content"
             android:text="시작" />
     </LinearLayout>

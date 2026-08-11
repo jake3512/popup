@@ -57,6 +57,7 @@ class BubbleService : Service() {
     private var bubbleView: View? = null
     private var popupView: View? = null
     private lateinit var bubbleParams: WindowManager.LayoutParams
+    private lateinit var popupParams: WindowManager.LayoutParams
     private var expanded = false
 
     private val serviceJob = Job()
@@ -273,7 +274,7 @@ class BubbleService : Service() {
         removeBubble()
 
         val view = LayoutInflater.from(this).inflate(R.layout.view_popup, null)
-        val params = WindowManager.LayoutParams(
+        popupParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -298,8 +299,9 @@ class BubbleService : Service() {
         }
         setupToolbar(view)
         view.findViewById<View>(R.id.studyTimeToggleButton).setOnClickListener { toggleStudyTimer(view) }
+        setupPopupDrag(view)
 
-        windowManager.addView(view, params)
+        windowManager.addView(view, popupParams)
         popupView = view
         expanded = true
         viewingDate = LocalDate.now()
@@ -308,10 +310,35 @@ class BubbleService : Service() {
         initStudyTimer(view)
     }
 
+    /** Lets the user drag the whole popup around the screen by its title bar, same pattern as the bubble's own drag handling. */
+    private fun setupPopupDrag(view: View) {
+        var initialX = 0
+        var initialY = 0
+        var touchX = 0f
+        var touchY = 0f
+        view.findViewById<View>(R.id.popupTitleBar).setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = popupParams.x
+                    initialY = popupParams.y
+                    touchX = event.rawX
+                    touchY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    popupParams.x = initialX + (event.rawX - touchX).toInt()
+                    popupParams.y = initialY + (event.rawY - touchY).toInt()
+                    windowManager.updateViewLayout(view, popupParams)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
     private fun collapse() {
         cancelTimer()
         cancelStopwatch()
-        pauseStudyTimer()
         popupView?.findViewById<FrameLayout>(R.id.minigameContainer)?.removeAllViews()
         popupView?.let { runCatching { windowManager.removeView(it) } }
         popupView = null
@@ -564,7 +591,7 @@ class BubbleService : Service() {
         studyRunning = true
         val runnable = object : Runnable {
             override fun run() {
-                tickStudyTimer(view)
+                tickStudyTimer()
                 studyHandler.postDelayed(this, 1000)
             }
         }
@@ -573,7 +600,8 @@ class BubbleService : Service() {
         updateStudyTimeButton(view)
     }
 
-    private fun tickStudyTimer(view: View) {
+    /** Runs every second while the timer is active, independent of the popup being open — only touches the view when [popupView] is non-null. */
+    private fun tickStudyTimer() {
         val today = LocalDate.now()
         if (today != studyDate) {
             val finishedDate = studyDate
@@ -585,7 +613,7 @@ class BubbleService : Service() {
         }
 
         studySeconds++
-        updateStudyTimeDisplay(view)
+        popupView?.let { updateStudyTimeDisplay(it) }
 
         val now = LocalTime.now()
         if (now.hour == 23 && now.minute == 59) {
@@ -605,14 +633,14 @@ class BubbleService : Service() {
         serviceScope.launch { studyTimeRepository.setSeconds(date, seconds) }
     }
 
-    /** Stops ticking without resetting the accumulated seconds. Safe to call with no view (e.g. on collapse). */
+    /** Stops ticking without resetting the accumulated seconds. Safe to call with no view. */
     private fun pauseStudyTimer(view: View? = null) {
         studyRunnable?.let { studyHandler.removeCallbacks(it) }
         studyRunnable = null
         val wasRunning = studyRunning
         studyRunning = false
         if (wasRunning) persistStudyTime()
-        view?.let { updateStudyTimeButton(it) }
+        (view ?: popupView)?.let { updateStudyTimeButton(it) }
     }
 
     // --- Data loading ---
@@ -697,6 +725,7 @@ class BubbleService : Service() {
     private fun renderTimetable(container: LinearLayout, slots: List<TimetableSlot>) {
         container.removeAllViews()
         val density = resources.displayMetrics.density
+        val borderWidth = (1 * density).toInt().coerceAtLeast(1)
         slots.forEach { slot ->
             val tv = TextView(this)
             tv.text = if (slot.isMovingClass) {
@@ -706,20 +735,22 @@ class BubbleService : Service() {
             }
             tv.textSize = 14f
             tv.setTextColor(currentStyle.bodyTextColor.toInt())
-            if (slot.isMovingClass) {
-                tv.setTypeface(null, Typeface.BOLD)
-                tv.background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = 8f * density
-                    setColor(movingClassHighlight)
-                }
-                val hPad = (8 * density).toInt()
-                val vPad = (4 * density).toInt()
-                tv.setPadding(hPad, vPad, hPad, vPad)
-            } else {
-                tv.background = null
-                tv.setPadding(0, 4, 0, 4)
+            tv.setTypeface(null, if (slot.isMovingClass) Typeface.BOLD else Typeface.NORMAL)
+            tv.background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 8f * density
+                setColor(if (slot.isMovingClass) movingClassHighlight else Color.TRANSPARENT)
+                setStroke(borderWidth, currentStyle.borderColor.toInt())
             }
+            val hPad = (8 * density).toInt()
+            val vPad = (4 * density).toInt()
+            tv.setPadding(hPad, vPad, hPad, vPad)
+            val layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            layoutParams.topMargin = (4 * density).toInt()
+            tv.layoutParams = layoutParams
             container.addView(tv)
         }
     }
@@ -757,6 +788,7 @@ class BubbleService : Service() {
         super.onDestroy()
         countDownTimer?.cancel()
         stopwatchHandler.removeCallbacksAndMessages(null)
+        if (studyRunning) persistStudyTime()
         studyHandler.removeCallbacksAndMessages(null)
         removeBubble()
         popupView?.let { runCatching { windowManager.removeView(it) } }
