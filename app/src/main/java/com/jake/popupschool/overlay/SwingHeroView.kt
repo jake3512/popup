@@ -9,11 +9,12 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
 import kotlin.math.abs
+import kotlin.math.hypot
 
 /**
- * A small original illustration (not Marvel artwork) of a masked hero that bounces
- * around under gravity and, on tap, launches into a web-swing arc. Labeled
- * "스파이더맨" in the UI per the user's explicit request.
+ * A small original illustration (not Marvel artwork) of a masked hero that hangs under
+ * gravity and, on tap, shoots a web toward the tapped point and launches that way.
+ * Labeled "스파이더맨" in the UI per the user's explicit request.
  */
 class SwingHeroView(context: Context) : View(context) {
 
@@ -29,11 +30,12 @@ class SwingHeroView(context: Context) : View(context) {
 
     private var posX = 60f
     private var posY = 60f
-    private var velocityX = 4f
+    private var velocityX = 0f
     private var velocityY = 0f
 
     private var swinging = false
     private var swingAnchorX = 0f
+    private var swingAnchorY = 0f
 
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = 16
@@ -64,54 +66,54 @@ class SwingHeroView(context: Context) : View(context) {
         if (posX - radius < 0f) {
             posX = radius
             velocityX = abs(velocityX)
+            swinging = false
         } else if (posX + radius > w) {
             posX = w - radius
             velocityX = -abs(velocityX)
+            swinging = false
         }
 
         if (posY - radius < 0f) {
             posY = radius
             velocityY = abs(velocityY)
+            swinging = false
         } else if (posY + radius > h) {
             posY = h - radius
-            if (swinging) {
-                swinging = false
-            }
             velocityY = -abs(velocityY) * FLOOR_DAMPING
-            if (abs(velocityY) < 3f) {
-                // keep a small hop alive so it doesn't come to a dead stop
-                velocityY = -6f
-            }
+            swinging = false
+        }
+
+        if (swinging && hypot(posX - swingAnchorX, posY - swingAnchorY) < radius * 1.5f) {
+            swinging = false
         }
 
         invalidate()
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_DOWN && !swinging) {
-            val dx = event.x - posX
-            val dy = event.y - posY
-            val hitRadius = radius * 2.5f
-            if (dx * dx + dy * dy <= hitRadius * hitRadius) {
-                startSwing()
-                return true
-            }
+        if (event.action == MotionEvent.ACTION_DOWN) {
+            shootWebTo(event.x, event.y)
+            return true
         }
         return super.onTouchEvent(event)
     }
 
-    private fun startSwing() {
+    /** Launches the hero toward [targetX], [targetY], drawing a web line to that point until it arrives or bounces. */
+    private fun shootWebTo(targetX: Float, targetY: Float) {
+        val dx = targetX - posX
+        val dy = targetY - posY
+        val distance = hypot(dx, dy).coerceAtLeast(1f)
+        velocityX = dx / distance * WEB_LAUNCH_SPEED
+        velocityY = dy / distance * WEB_LAUNCH_SPEED
         swinging = true
-        swingAnchorX = posX
-        val towardRight = width <= 0 || posX < width / 2f
-        velocityX = if (towardRight) SWING_SPEED else -SWING_SPEED
-        velocityY = -SWING_LAUNCH_SPEED
+        swingAnchorX = targetX
+        swingAnchorY = targetY
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (swinging) {
-            canvas.drawLine(swingAnchorX, 0f, posX, posY, webPaint)
+            canvas.drawLine(swingAnchorX, swingAnchorY, posX, posY, webPaint)
         }
         canvas.drawCircle(posX, posY, radius, bodyPaint)
         canvas.drawRect(posX - radius, posY - radius * 0.35f, posX + radius, posY, maskPaint)
@@ -122,7 +124,6 @@ class SwingHeroView(context: Context) : View(context) {
         const val GRAVITY = 0.6f
         const val MAX_FALL_SPEED = 18f
         const val FLOOR_DAMPING = 0.6f
-        const val SWING_SPEED = 9f
-        const val SWING_LAUNCH_SPEED = 15f
+        const val WEB_LAUNCH_SPEED = 15f
     }
 }

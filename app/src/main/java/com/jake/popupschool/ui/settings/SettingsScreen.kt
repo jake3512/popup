@@ -82,15 +82,6 @@ fun SettingsScreen(onBack: () -> Unit) {
         Text("학교 정보 설정", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = apiKey,
-            onValueChange = { apiKey = it },
-            label = { Text("NEIS Open API 키") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(Modifier.height(12.dp))
-
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = schoolQuery,
@@ -101,8 +92,8 @@ fun SettingsScreen(onBack: () -> Unit) {
             Spacer(Modifier.width(8.dp))
             Button(
                 onClick = {
-                    if (apiKey.isBlank() || schoolQuery.isBlank()) {
-                        statusMessage = "API 키와 학교 이름을 입력해주세요."
+                    if (schoolQuery.isBlank()) {
+                        statusMessage = "학교 이름을 입력해주세요."
                         return@Button
                     }
                     searching = true
