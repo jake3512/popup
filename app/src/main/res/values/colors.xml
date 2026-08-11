@@ -1,6 +1,8 @@
 <resources>
-    <color name="purple_500">#6750A4</color>
-    <color name="purple_700">#4F378B</color>
+    <color name="purple_500">#4A3F8C</color>
+    <color name="purple_700">#332A66</color>
+    <color name="gold_500">#B4883A</color>
+    <color name="gold_100">#FBE6BB</color>
     <color name="teal_200">#4FD8C4</color>
     <color name="white">#FFFFFFFF</color>
     <color name="black">#FF000000</color>
