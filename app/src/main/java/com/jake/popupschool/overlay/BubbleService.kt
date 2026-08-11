@@ -34,6 +34,7 @@ import com.jake.popupschool.data.dday.DdayRepository
 import com.jake.popupschool.data.remote.NeisClient
 import com.jake.popupschool.data.repository.SchoolDataRepository
 import com.jake.popupschool.data.settings.SettingsRepository
+import com.jake.popupschool.data.study.StudyTimeRepository
 import com.jake.popupschool.data.timetable.TimetableRepository
 import com.jake.popupschool.data.timetable.TimetableSubjectRepository
 import com.jake.popupschool.domain.model.MealInfo
@@ -66,6 +67,7 @@ class BubbleService : Service() {
     private lateinit var schoolDataRepository: SchoolDataRepository
     private lateinit var timetableRepository: TimetableRepository
     private lateinit var timetableSubjectRepository: TimetableSubjectRepository
+    private lateinit var studyTimeRepository: StudyTimeRepository
     private var currentStyle: PopupStyle = PopupStyle.DEFAULT
 
     private var viewingDate: LocalDate = LocalDate.now()
@@ -77,6 +79,15 @@ class BubbleService : Service() {
     private var stopwatchRunnable: Runnable? = null
     private var stopwatchSeconds: Long = 0L
     private var stopwatchRunning: Boolean = false
+
+    // Persistent daily study-time counter, shown under the date row. Unlike the
+    // toolbar timer/stopwatch, this survives popup collapse and service restarts.
+    private val studyHandler = Handler(Looper.getMainLooper())
+    private var studyRunnable: Runnable? = null
+    private var studyDate: LocalDate = LocalDate.now()
+    private var studySeconds: Long = 0L
+    private var studyRunning: Boolean = false
+    private var studyLastCheckpointKey: String = ""
 
     private val movingClassHighlight = Color.parseColor("#40FFC107")
 
@@ -112,6 +123,7 @@ class BubbleService : Service() {
         schoolDataRepository = SchoolDataRepository(NeisClient.api)
         timetableRepository = TimetableRepository(applicationContext)
         timetableSubjectRepository = TimetableSubjectRepository(applicationContext)
+        studyTimeRepository = StudyTimeRepository(applicationContext)
 
         NotificationHelper.ensureChannel(this)
         startForegroundWithType(buildNotification())
@@ -242,6 +254,7 @@ class BubbleService : Service() {
         view.findViewById<TextView>(R.id.dateLabelText).setTextColor(currentStyle.headerTextColor.toInt())
         view.findViewById<TextView>(R.id.timerDisplayText).setTextColor(currentStyle.headerTextColor.toInt())
         view.findViewById<TextView>(R.id.stopwatchDisplayText).setTextColor(currentStyle.headerTextColor.toInt())
+        view.findViewById<TextView>(R.id.studyTimeText).setTextColor(currentStyle.headerTextColor.toInt())
     }
 
     private fun removeBubble() {
@@ -284,6 +297,7 @@ class BubbleService : Service() {
             false
         }
         setupToolbar(view)
+        view.findViewById<View>(R.id.studyTimeToggleButton).setOnClickListener { toggleStudyTimer(view) }
 
         windowManager.addView(view, params)
         popupView = view
@@ -291,11 +305,13 @@ class BubbleService : Service() {
         viewingDate = LocalDate.now()
         loadDday(view)
         loadTimetableAndMeal(view)
+        initStudyTimer(view)
     }
 
     private fun collapse() {
         cancelTimer()
         cancelStopwatch()
+        pauseStudyTimer()
         popupView?.findViewById<FrameLayout>(R.id.minigameContainer)?.removeAllViews()
         popupView?.let { runCatching { windowManager.removeView(it) } }
         popupView = null
@@ -504,6 +520,101 @@ class BubbleService : Service() {
         stopwatchSeconds = 0
     }
 
+    // --- Study time: persistent daily counter shown under the date row ---
+
+    private fun initStudyTimer(view: View) {
+        serviceScope.launch {
+            finalizeStudyDayIfRolledOver()
+            if (!studyRunning) {
+                studySeconds = studyTimeRepository.getSeconds(studyDate)
+            }
+            updateStudyTimeDisplay(view)
+            updateStudyTimeButton(view)
+        }
+    }
+
+    private suspend fun finalizeStudyDayIfRolledOver() {
+        val today = LocalDate.now()
+        if (studyDate != today) {
+            studyTimeRepository.setSeconds(studyDate, studySeconds)
+            studyDate = today
+            studySeconds = studyTimeRepository.getSeconds(today)
+            studyLastCheckpointKey = ""
+        }
+    }
+
+    private fun updateStudyTimeDisplay(view: View) {
+        val h = studySeconds / 3600
+        val m = (studySeconds % 3600) / 60
+        val s = studySeconds % 60
+        view.findViewById<TextView>(R.id.studyTimeText).text =
+            "오늘 공부시간 %02d:%02d:%02d".format(h, m, s)
+    }
+
+    private fun updateStudyTimeButton(view: View) {
+        view.findViewById<TextView>(R.id.studyTimeToggleButton).text = if (studyRunning) "일시정지" else "시작"
+    }
+
+    private fun toggleStudyTimer(view: View) {
+        if (studyRunning) pauseStudyTimer(view) else startStudyTimer(view)
+    }
+
+    private fun startStudyTimer(view: View) {
+        if (studyRunning) return
+        studyRunning = true
+        val runnable = object : Runnable {
+            override fun run() {
+                tickStudyTimer(view)
+                studyHandler.postDelayed(this, 1000)
+            }
+        }
+        studyRunnable = runnable
+        studyHandler.postDelayed(runnable, 1000)
+        updateStudyTimeButton(view)
+    }
+
+    private fun tickStudyTimer(view: View) {
+        val today = LocalDate.now()
+        if (today != studyDate) {
+            val finishedDate = studyDate
+            val finishedSeconds = studySeconds
+            serviceScope.launch { studyTimeRepository.setSeconds(finishedDate, finishedSeconds) }
+            studyDate = today
+            studySeconds = 0
+            studyLastCheckpointKey = ""
+        }
+
+        studySeconds++
+        updateStudyTimeDisplay(view)
+
+        val now = LocalTime.now()
+        if (now.hour == 23 && now.minute == 59) {
+            val checkpointKey = "$studyDate-2359"
+            if (studyLastCheckpointKey != checkpointKey) {
+                studyLastCheckpointKey = checkpointKey
+                persistStudyTime()
+            }
+        } else if (studySeconds % 10L == 0L) {
+            persistStudyTime()
+        }
+    }
+
+    private fun persistStudyTime() {
+        val date = studyDate
+        val seconds = studySeconds
+        serviceScope.launch { studyTimeRepository.setSeconds(date, seconds) }
+    }
+
+    /** Stops ticking without resetting the accumulated seconds. Safe to call with no view (e.g. on collapse). */
+    private fun pauseStudyTimer(view: View? = null) {
+        studyRunnable?.let { studyHandler.removeCallbacks(it) }
+        studyRunnable = null
+        val wasRunning = studyRunning
+        studyRunning = false
+        if (wasRunning) persistStudyTime()
+        view?.let { updateStudyTimeButton(it) }
+    }
+
     // --- Data loading ---
 
     private fun loadDday(view: View) {
@@ -646,6 +757,7 @@ class BubbleService : Service() {
         super.onDestroy()
         countDownTimer?.cancel()
         stopwatchHandler.removeCallbacksAndMessages(null)
+        studyHandler.removeCallbacksAndMessages(null)
         removeBubble()
         popupView?.let { runCatching { windowManager.removeView(it) } }
         serviceJob.cancel()
