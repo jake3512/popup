@@ -206,12 +206,68 @@
                     android:text="시작" />
 
                 <Button
-                    android:id="@+id/timerStopButton"
+                    android:id="@+id/timerResetButton"
                     style="?android:attr/buttonStyleSmall"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="정지" />
+                    android:text="초기화" />
+
+                <Button
+                    android:id="@+id/timerPauseButton"
+                    style="?android:attr/buttonStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="일시정지"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/stopwatchPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/stopwatchDisplayText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textSize="40sp"
+                android:textStyle="bold"
+                android:textColor="@color/black" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="16dp">
+
+                <Button
+                    android:id="@+id/stopwatchStartButton"
+                    style="?android:attr/buttonStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="시작" />
+
+                <Button
+                    android:id="@+id/stopwatchResetButton"
+                    style="?android:attr/buttonStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="초기화" />
+
+                <Button
+                    android:id="@+id/stopwatchPauseButton"
+                    style="?android:attr/buttonStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="일시정지"
+                    android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
 
@@ -248,13 +304,13 @@
             android:contentDescription="@string/tool_timer" />
 
         <ImageButton
-            android:id="@+id/toolAlarmButton"
+            android:id="@+id/toolStopwatchButton"
             android:layout_width="0dp"
             android:layout_height="36dp"
             android:layout_weight="1"
             android:background="@android:color/transparent"
-            android:src="@drawable/ic_tool_alarm"
-            android:contentDescription="@string/tool_alarm" />
+            android:src="@drawable/ic_tool_stopwatch"
+            android:contentDescription="@string/tool_stopwatch" />
 
         <ImageButton
             android:id="@+id/toolMinigameButton"

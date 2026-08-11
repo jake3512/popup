@@ -13,8 +13,9 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.CountDownTimer
+import android.os.Handler
 import android.os.IBinder
-import android.provider.AlarmClock
+import android.os.Looper
 import android.view.GestureDetector
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -71,6 +72,12 @@ class BubbleService : Service() {
     private var countDownTimer: CountDownTimer? = null
     private var timerRemainingSeconds: Long = 0L
     private var timerRunning: Boolean = false
+
+    private val stopwatchHandler = Handler(Looper.getMainLooper())
+    private var stopwatchRunnable: Runnable? = null
+    private var stopwatchSeconds: Long = 0L
+    private var stopwatchRunning: Boolean = false
+
     private val movingClassHighlight = Color.parseColor("#40FFC107")
 
     private val dayGestureDetector by lazy {
@@ -93,7 +100,7 @@ class BubbleService : Service() {
         })
     }
 
-    private enum class ContentMode { NORMAL, TIMER, MINIGAME }
+    private enum class ContentMode { NORMAL, TIMER, STOPWATCH, MINIGAME }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -234,6 +241,7 @@ class BubbleService : Service() {
         view.findViewById<TextView>(R.id.lastUpdatedText).setTextColor(currentStyle.secondaryTextColor.toInt())
         view.findViewById<TextView>(R.id.dateLabelText).setTextColor(currentStyle.headerTextColor.toInt())
         view.findViewById<TextView>(R.id.timerDisplayText).setTextColor(currentStyle.headerTextColor.toInt())
+        view.findViewById<TextView>(R.id.stopwatchDisplayText).setTextColor(currentStyle.headerTextColor.toInt())
     }
 
     private fun removeBubble() {
@@ -287,6 +295,7 @@ class BubbleService : Service() {
 
     private fun collapse() {
         cancelTimer()
+        cancelStopwatch()
         popupView?.findViewById<FrameLayout>(R.id.minigameContainer)?.removeAllViews()
         popupView?.let { runCatching { windowManager.removeView(it) } }
         popupView = null
@@ -306,18 +315,23 @@ class BubbleService : Service() {
         return if (date == LocalDate.now()) "$base · 오늘" else base
     }
 
-    // --- Toolbar: calendar / timer / alarm / minigame ---
+    // --- Toolbar: calendar / timer / stopwatch / minigame ---
 
     private fun setupToolbar(view: View) {
         view.findViewById<View>(R.id.toolCalendarButton).setOnClickListener { showDatePicker(view) }
-        view.findViewById<View>(R.id.toolTimerButton).setOnClickListener { toggleTimerPanel(view) }
-        view.findViewById<View>(R.id.toolAlarmButton).setOnClickListener { openSystemAlarm() }
-        view.findViewById<View>(R.id.toolMinigameButton).setOnClickListener { toggleMinigame(view) }
+        view.findViewById<View>(R.id.toolTimerButton).setOnClickListener { toggleMode(view, ContentMode.TIMER) }
+        view.findViewById<View>(R.id.toolStopwatchButton).setOnClickListener { toggleMode(view, ContentMode.STOPWATCH) }
+        view.findViewById<View>(R.id.toolMinigameButton).setOnClickListener { toggleMode(view, ContentMode.MINIGAME) }
 
         view.findViewById<View>(R.id.timerAdd30SecButton).setOnClickListener { addTimerTime(view, 30L) }
         view.findViewById<View>(R.id.timerAdd1MinButton).setOnClickListener { addTimerTime(view, 60L) }
         view.findViewById<View>(R.id.timerStartButton).setOnClickListener { startTimerCountdown(view) }
-        view.findViewById<View>(R.id.timerStopButton).setOnClickListener { resetTimer(view) }
+        view.findViewById<View>(R.id.timerPauseButton).setOnClickListener { pauseTimer(view) }
+        view.findViewById<View>(R.id.timerResetButton).setOnClickListener { resetTimer(view) }
+
+        view.findViewById<View>(R.id.stopwatchStartButton).setOnClickListener { startStopwatch(view) }
+        view.findViewById<View>(R.id.stopwatchPauseButton).setOnClickListener { pauseStopwatch(view) }
+        view.findViewById<View>(R.id.stopwatchResetButton).setOnClickListener { resetStopwatch(view) }
     }
 
     private fun showContentMode(view: View, mode: ContentMode) {
@@ -325,8 +339,39 @@ class BubbleService : Service() {
             if (mode == ContentMode.NORMAL) View.VISIBLE else View.GONE
         view.findViewById<View>(R.id.timerPanel).visibility =
             if (mode == ContentMode.TIMER) View.VISIBLE else View.GONE
+        view.findViewById<View>(R.id.stopwatchPanel).visibility =
+            if (mode == ContentMode.STOPWATCH) View.VISIBLE else View.GONE
         view.findViewById<View>(R.id.minigameContainer).visibility =
             if (mode == ContentMode.MINIGAME) View.VISIBLE else View.GONE
+    }
+
+    /** Tears down whichever tool panel isn't [mode] and shows [mode]. Toggling the active mode's own tool returns to NORMAL. */
+    private fun toggleMode(view: View, mode: ContentMode) {
+        val currentlyActive = view.findViewById<View>(
+            when (mode) {
+                ContentMode.TIMER -> R.id.timerPanel
+                ContentMode.STOPWATCH -> R.id.stopwatchPanel
+                ContentMode.MINIGAME -> R.id.minigameContainer
+                ContentMode.NORMAL -> R.id.contentScrollView
+            }
+        ).visibility == View.VISIBLE
+        enterMode(view, if (currentlyActive) ContentMode.NORMAL else mode)
+    }
+
+    private fun enterMode(view: View, mode: ContentMode) {
+        if (mode != ContentMode.TIMER) resetTimer(view)
+        if (mode != ContentMode.STOPWATCH) resetStopwatch(view)
+        val minigameContainer = view.findViewById<FrameLayout>(R.id.minigameContainer)
+        if (mode != ContentMode.MINIGAME) {
+            minigameContainer.removeAllViews()
+        } else {
+            minigameContainer.removeAllViews()
+            minigameContainer.addView(
+                SwingHeroView(this),
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+            )
+        }
+        showContentMode(view, mode)
     }
 
     private fun showDatePicker(view: View) {
@@ -344,21 +389,18 @@ class BubbleService : Service() {
         dialog.show()
     }
 
-    private fun toggleTimerPanel(view: View) {
-        val timerPanel = view.findViewById<View>(R.id.timerPanel)
-        if (timerPanel.visibility == View.VISIBLE) {
-            resetTimer(view)
-            showContentMode(view, ContentMode.NORMAL)
-        } else {
-            stopMinigame(view)
-            showContentMode(view, ContentMode.TIMER)
-        }
-    }
+    // --- Timer (counts down; +30초/+1분 accumulate before or during a run) ---
 
     private fun updateTimerDisplay(view: View) {
         val seconds = timerRemainingSeconds.coerceAtLeast(0)
         view.findViewById<TextView>(R.id.timerDisplayText).text =
             "%02d:%02d".format(seconds / 60, seconds % 60)
+    }
+
+    private fun updateTimerButtons(view: View) {
+        view.findViewById<View>(R.id.timerStartButton).visibility = if (timerRunning) View.GONE else View.VISIBLE
+        view.findViewById<View>(R.id.timerResetButton).visibility = if (timerRunning) View.GONE else View.VISIBLE
+        view.findViewById<View>(R.id.timerPauseButton).visibility = if (timerRunning) View.VISIBLE else View.GONE
     }
 
     private fun addTimerTime(view: View, deltaSeconds: Long) {
@@ -373,6 +415,14 @@ class BubbleService : Service() {
         if (timerRemainingSeconds <= 0) return
         timerRunning = true
         runCountdown(view)
+        updateTimerButtons(view)
+    }
+
+    private fun pauseTimer(view: View) {
+        countDownTimer?.cancel()
+        countDownTimer = null
+        timerRunning = false
+        updateTimerButtons(view)
     }
 
     private fun runCountdown(view: View) {
@@ -387,6 +437,7 @@ class BubbleService : Service() {
                 timerRemainingSeconds = 0
                 timerRunning = false
                 updateTimerDisplay(view)
+                updateTimerButtons(view)
             }
         }.start()
     }
@@ -394,6 +445,7 @@ class BubbleService : Service() {
     private fun resetTimer(view: View) {
         cancelTimer()
         updateTimerDisplay(view)
+        updateTimerButtons(view)
     }
 
     private fun cancelTimer() {
@@ -403,31 +455,53 @@ class BubbleService : Service() {
         timerRemainingSeconds = 0
     }
 
-    private fun openSystemAlarm() {
-        val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        runCatching { startActivity(intent) }
+    // --- Stopwatch (counts up) ---
+
+    private fun updateStopwatchDisplay(view: View) {
+        val seconds = stopwatchSeconds
+        view.findViewById<TextView>(R.id.stopwatchDisplayText).text =
+            "%02d:%02d".format(seconds / 60, seconds % 60)
     }
 
-    private fun toggleMinigame(view: View) {
-        val container = view.findViewById<FrameLayout>(R.id.minigameContainer)
-        if (container.visibility == View.VISIBLE) {
-            stopMinigame(view)
-        } else {
-            resetTimer(view)
-            showContentMode(view, ContentMode.MINIGAME)
-            container.removeAllViews()
-            container.addView(
-                SwingHeroView(this),
-                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-            )
-        }
+    private fun updateStopwatchButtons(view: View) {
+        view.findViewById<View>(R.id.stopwatchStartButton).visibility = if (stopwatchRunning) View.GONE else View.VISIBLE
+        view.findViewById<View>(R.id.stopwatchResetButton).visibility = if (stopwatchRunning) View.GONE else View.VISIBLE
+        view.findViewById<View>(R.id.stopwatchPauseButton).visibility = if (stopwatchRunning) View.VISIBLE else View.GONE
     }
 
-    private fun stopMinigame(view: View) {
-        view.findViewById<FrameLayout>(R.id.minigameContainer).removeAllViews()
-        showContentMode(view, ContentMode.NORMAL)
+    private fun startStopwatch(view: View) {
+        if (stopwatchRunning) return
+        stopwatchRunning = true
+        val runnable = object : Runnable {
+            override fun run() {
+                stopwatchSeconds++
+                updateStopwatchDisplay(view)
+                stopwatchHandler.postDelayed(this, 1000)
+            }
+        }
+        stopwatchRunnable = runnable
+        stopwatchHandler.postDelayed(runnable, 1000)
+        updateStopwatchButtons(view)
+    }
+
+    private fun pauseStopwatch(view: View) {
+        stopwatchRunnable?.let { stopwatchHandler.removeCallbacks(it) }
+        stopwatchRunnable = null
+        stopwatchRunning = false
+        updateStopwatchButtons(view)
+    }
+
+    private fun resetStopwatch(view: View) {
+        cancelStopwatch()
+        updateStopwatchDisplay(view)
+        updateStopwatchButtons(view)
+    }
+
+    private fun cancelStopwatch() {
+        stopwatchRunnable?.let { stopwatchHandler.removeCallbacks(it) }
+        stopwatchRunnable = null
+        stopwatchRunning = false
+        stopwatchSeconds = 0
     }
 
     // --- Data loading ---
@@ -571,6 +645,7 @@ class BubbleService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         countDownTimer?.cancel()
+        stopwatchHandler.removeCallbacksAndMessages(null)
         removeBubble()
         popupView?.let { runCatching { windowManager.removeView(it) } }
         serviceJob.cancel()

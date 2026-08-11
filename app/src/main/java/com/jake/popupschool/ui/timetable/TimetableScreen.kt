@@ -243,13 +243,15 @@ fun TimetableScreen(onBack: () -> Unit) {
     }
 
     if (showAddPeriodDialog) {
+        val nextPeriod = entries.count { it.dayOfWeek == selectedDay } + 1
         AddPeriodDialog(
             subjects = subjects,
+            nextPeriod = nextPeriod,
             onDismiss = { showAddPeriodDialog = false },
-            onConfirm = { period, subjectId ->
+            onConfirm = { subjectId ->
                 scope.launch {
                     timetableRepository.add(
-                        ManualTimetableEntry(dayOfWeek = selectedDay, period = period, subjectId = subjectId)
+                        ManualTimetableEntry(dayOfWeek = selectedDay, period = nextPeriod, subjectId = subjectId)
                     )
                 }
                 showAddPeriodDialog = false
@@ -301,23 +303,21 @@ private fun AddSubjectDialog(onDismiss: () -> Unit, onConfirm: (String, Boolean)
 @Composable
 private fun AddPeriodDialog(
     subjects: List<TimetableSubject>,
+    nextPeriod: Int,
     onDismiss: () -> Unit,
-    onConfirm: (Int, String) -> Unit
+    onConfirm: (String) -> Unit
 ) {
-    var period by remember { mutableStateOf("") }
     var selectedSubjectId by remember { mutableStateOf(subjects.firstOrNull()?.id) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("교시 추가") },
+        title = { Text("${nextPeriod}교시 추가") },
         text = {
             Column {
-                OutlinedTextField(
-                    value = period,
-                    onValueChange = { period = it.filter { c -> c.isDigit() } },
-                    label = { Text("교시") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                Text(
+                    "입력한 순서대로 교시가 매겨집니다. 이번에는 ${nextPeriod}교시로 등록됩니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(12.dp))
                 if (subjects.isEmpty()) {
@@ -357,10 +357,9 @@ private fun AddPeriodDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                val periodValue = period.toIntOrNull()
                 val subjectId = selectedSubjectId
-                if (periodValue != null && subjectId != null) {
-                    onConfirm(periodValue, subjectId)
+                if (subjectId != null) {
+                    onConfirm(subjectId)
                 }
             }) {
                 Text("추가")
