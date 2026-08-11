@@ -11,6 +11,13 @@ import kotlinx.coroutines.flow.map
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
+/**
+ * Embedded at the user's explicit request as a convenience default so the app is usable
+ * immediately after install. Anyone with access to this source (or its git history) can
+ * read this key, since it is committed to the repository.
+ */
+private const val DEFAULT_NEIS_API_KEY = "1fa8eef383494bb4be893637fc40c7f7"
+
 class SettingsRepository(private val context: Context) {
 
     private object Keys {
@@ -25,7 +32,7 @@ class SettingsRepository(private val context: Context) {
 
     val settingsFlow: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
         AppSettings(
-            apiKey = prefs[Keys.API_KEY].orEmpty(),
+            apiKey = prefs[Keys.API_KEY]?.takeIf { it.isNotBlank() } ?: DEFAULT_NEIS_API_KEY,
             officeCode = prefs[Keys.OFFICE_CODE].orEmpty(),
             schoolCode = prefs[Keys.SCHOOL_CODE].orEmpty(),
             schoolName = prefs[Keys.SCHOOL_NAME].orEmpty(),
