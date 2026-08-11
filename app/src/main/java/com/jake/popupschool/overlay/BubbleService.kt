@@ -26,8 +26,10 @@ import com.jake.popupschool.data.dday.DdayRepository
 import com.jake.popupschool.data.remote.NeisClient
 import com.jake.popupschool.data.repository.SchoolDataRepository
 import com.jake.popupschool.data.settings.SettingsRepository
+import com.jake.popupschool.data.timetable.TimetableRepository
 import com.jake.popupschool.domain.model.MealInfo
 import com.jake.popupschool.domain.model.TimetableSlot
+import com.jake.popupschool.domain.model.TimetableSource
 import com.jake.popupschool.util.ddayLabel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +54,7 @@ class BubbleService : Service() {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var ddayRepository: DdayRepository
     private lateinit var schoolDataRepository: SchoolDataRepository
+    private lateinit var timetableRepository: TimetableRepository
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -61,6 +64,7 @@ class BubbleService : Service() {
         settingsRepository = SettingsRepository(applicationContext)
         ddayRepository = DdayRepository(applicationContext)
         schoolDataRepository = SchoolDataRepository(NeisClient.api)
+        timetableRepository = TimetableRepository(applicationContext)
 
         NotificationHelper.ensureChannel(this)
         startForegroundWithType(buildNotification())
@@ -215,27 +219,36 @@ class BubbleService : Service() {
 
             renderDday(ddayContainer, ddayItems)
 
-            if (!settings.isConfigured) {
-                renderMessage(timetableContainer, "설정에서 학교 정보를 입력해주세요.")
-                renderMessage(mealContainer, "설정에서 학교 정보를 입력해주세요.")
-                return@launch
-            }
-
             val today = LocalDate.now()
 
-            schoolDataRepository.getTimetableForDate(settings, today)
-                .onSuccess { slots ->
-                    if (slots.isEmpty()) renderMessage(timetableContainer, "오늘은 시간표가 없습니다.")
-                    else renderTimetable(timetableContainer, slots)
-                }
-                .onFailure { renderMessage(timetableContainer, "시간표를 불러오지 못했습니다.") }
+            if (settings.timetableSource == TimetableSource.MANUAL) {
+                val slots = timetableRepository.entriesFlow.first()
+                    .filter { it.dayOfWeek == today.dayOfWeek.value }
+                    .sortedBy { it.period }
+                    .map { TimetableSlot(period = it.period, subject = it.subject) }
+                if (slots.isEmpty()) renderMessage(timetableContainer, "등록된 시간표가 없습니다.")
+                else renderTimetable(timetableContainer, slots)
+            } else if (settings.isConfigured) {
+                schoolDataRepository.getTimetableForDate(settings, today)
+                    .onSuccess { slots ->
+                        if (slots.isEmpty()) renderMessage(timetableContainer, "오늘은 시간표가 없습니다.")
+                        else renderTimetable(timetableContainer, slots)
+                    }
+                    .onFailure { renderMessage(timetableContainer, "시간표를 불러오지 못했습니다.") }
+            } else {
+                renderMessage(timetableContainer, "설정에서 학교 정보를 입력해주세요.")
+            }
 
-            schoolDataRepository.getMealsForDate(settings, today)
-                .onSuccess { meals ->
-                    if (meals.isEmpty()) renderMessage(mealContainer, "오늘은 급식 정보가 없습니다.")
-                    else renderMeals(mealContainer, meals)
-                }
-                .onFailure { renderMessage(mealContainer, "급식 정보를 불러오지 못했습니다.") }
+            if (settings.isConfigured) {
+                schoolDataRepository.getMealsForDate(settings, today)
+                    .onSuccess { meals ->
+                        if (meals.isEmpty()) renderMessage(mealContainer, "오늘은 급식 정보가 없습니다.")
+                        else renderMeals(mealContainer, meals)
+                    }
+                    .onFailure { renderMessage(mealContainer, "급식 정보를 불러오지 못했습니다.") }
+            } else {
+                renderMessage(mealContainer, "설정에서 학교 정보를 입력해주세요.")
+            }
 
             lastUpdatedText.text = "업데이트: ${LocalTime.now().withNano(0)}"
         }

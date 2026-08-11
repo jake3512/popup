@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.jake.popupschool.domain.model.SchoolLevel
+import com.jake.popupschool.domain.model.TimetableSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -28,6 +29,7 @@ class SettingsRepository(private val context: Context) {
         val SCHOOL_LEVEL = stringPreferencesKey("school_level")
         val GRADE = stringPreferencesKey("grade")
         val CLASS_NUM = stringPreferencesKey("class_num")
+        val TIMETABLE_SOURCE = stringPreferencesKey("timetable_source")
     }
 
     val settingsFlow: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -40,7 +42,10 @@ class SettingsRepository(private val context: Context) {
                 runCatching { SchoolLevel.valueOf(name) }.getOrNull()
             } ?: SchoolLevel.HIGH,
             grade = prefs[Keys.GRADE].orEmpty(),
-            classNum = prefs[Keys.CLASS_NUM].orEmpty()
+            classNum = prefs[Keys.CLASS_NUM].orEmpty(),
+            timetableSource = prefs[Keys.TIMETABLE_SOURCE]?.let { name ->
+                runCatching { TimetableSource.valueOf(name) }.getOrNull()
+            } ?: TimetableSource.NEIS
         )
     }
 
@@ -55,6 +60,13 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.SCHOOL_LEVEL] = settings.schoolLevel.name
             prefs[Keys.GRADE] = settings.grade
             prefs[Keys.CLASS_NUM] = settings.classNum
+            prefs[Keys.TIMETABLE_SOURCE] = settings.timetableSource.name
+        }
+    }
+
+    suspend fun setTimetableSource(source: TimetableSource) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.TIMETABLE_SOURCE] = source.name
         }
     }
 }

@@ -15,6 +15,7 @@ import com.jake.popupschool.ui.dday.DdayScreen
 import com.jake.popupschool.ui.home.HomeScreen
 import com.jake.popupschool.ui.settings.SettingsScreen
 import com.jake.popupschool.ui.theme.PopupSchoolTheme
+import com.jake.popupschool.ui.timetable.TimetableScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,5 +37,6 @@ private fun PopupSchoolApp() {
         composable("home") { HomeScreen(navController) }
         composable("settings") { SettingsScreen(onBack = { navController.popBackStack() }) }
         composable("dday") { DdayScreen(onBack = { navController.popBackStack() }) }
+        composable("timetable") { TimetableScreen(onBack = { navController.popBackStack() }) }
     }
 }

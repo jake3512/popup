@@ -115,5 +115,9 @@ fun HomeScreen(navController: NavHostController) {
         Button(onClick = { navController.navigate("dday") }) {
             Text("디데이 관리")
         }
+
+        Button(onClick = { navController.navigate("timetable") }) {
+            Text("시간표 설정")
+        }
     }
 }
