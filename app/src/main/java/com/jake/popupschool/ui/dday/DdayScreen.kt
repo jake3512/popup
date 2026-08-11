@@ -2,21 +2,17 @@ package com.jake.popupschool.ui.dday
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -112,36 +108,53 @@ fun DdayScreen(onBack: () -> Unit) {
 @Composable
 private fun AddDdayDialog(onDismiss: () -> Unit, onConfirm: (String, LocalDate) -> Unit) {
     var title by remember { mutableStateOf("") }
-    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+    var titleConfirmed by remember { mutableStateOf(false) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("디데이 추가") },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+    if (!titleConfirmed) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("디데이 추가") },
+            text = {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("제목") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(8.dp))
-                DatePicker(state = datePickerState)
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { titleConfirmed = true },
+                    enabled = title.isNotBlank()
+                ) { Text("다음") }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("취소") }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val millis = datePickerState.selectedDateMillis
-                if (title.isNotBlank() && millis != null) {
-                    val date = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
-                    onConfirm(title, date)
+        )
+    } else {
+        // A Material3 DatePicker needs the sizing DatePickerDialog provides;
+        // it doesn't fit reliably inside a generic AlertDialog's content slot.
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+        DatePickerDialog(
+            onDismissRequest = onDismiss,
+            confirmButton = {
+                TextButton(onClick = {
+                    val millis = datePickerState.selectedDateMillis
+                    if (millis != null) {
+                        val date = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
+                        onConfirm(title, date)
+                    }
+                }) {
+                    Text("추가")
                 }
-            }) {
-                Text("추가")
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("취소") }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("취소") }
+        ) {
+            DatePicker(state = datePickerState)
         }
-    )
+    }
 }

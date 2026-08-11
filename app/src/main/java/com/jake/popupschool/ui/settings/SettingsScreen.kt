@@ -20,7 +20,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,8 +44,6 @@ fun SettingsScreen(onBack: () -> Unit) {
     val schoolDataRepository = remember { SchoolDataRepository(NeisClient.api) }
     val scope = rememberCoroutineScope()
 
-    val savedSettings by settingsRepository.settingsFlow.collectAsState(initial = AppSettings())
-
     var apiKey by remember { mutableStateOf("") }
     var schoolQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<SchoolSearchResult>>(emptyList()) }
@@ -55,21 +52,24 @@ fun SettingsScreen(onBack: () -> Unit) {
     var classNum by remember { mutableStateOf("") }
     var searching by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
-    var initialized by remember { mutableStateOf(false) }
 
-    LaunchedEffect(savedSettings) {
-        if (initialized) return@LaunchedEffect
-        initialized = true
-        apiKey = savedSettings.apiKey
-        grade = savedSettings.grade
-        classNum = savedSettings.classNum
-        if (savedSettings.schoolCode.isNotBlank()) {
+    // One-shot load of the persisted settings. Using collectAsState here would race:
+    // its synchronous placeholder value (AppSettings()) arrives before DataStore's real
+    // first emission, so an "only load once" guard keyed on the flow value would trip on
+    // the blank placeholder and never apply the actual saved settings.
+    LaunchedEffect(Unit) {
+        val current = settingsRepository.current()
+        apiKey = current.apiKey
+        grade = current.grade
+        classNum = current.classNum
+        if (current.schoolCode.isNotBlank()) {
+            schoolQuery = current.schoolName
             selectedSchool = SchoolSearchResult(
-                officeCode = savedSettings.officeCode,
+                officeCode = current.officeCode,
                 officeName = "",
-                schoolCode = savedSettings.schoolCode,
-                schoolName = savedSettings.schoolName,
-                schoolLevel = savedSettings.schoolLevel
+                schoolCode = current.schoolCode,
+                schoolName = current.schoolName,
+                schoolLevel = current.schoolLevel
             )
         }
     }
