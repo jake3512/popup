@@ -41,75 +41,222 @@
             android:contentDescription="@string/close" />
     </LinearLayout>
 
-    <ScrollView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:maxHeight="420dp"
-        android:scrollbars="vertical">
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="4dp">
+
+        <ImageButton
+            android:id="@+id/prevDayButton"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_chevron_left"
+            android:contentDescription="@string/previous_day" />
+
+        <TextView
+            android:id="@+id/dateLabelText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="@color/black"
+            android:text="" />
+
+        <ImageButton
+            android:id="@+id/nextDayButton"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_chevron_right"
+            android:contentDescription="@string/next_day" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="420dp"
+        android:layout_marginTop="4dp">
+
+        <ScrollView
+            android:id="@+id/contentScrollView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scrollbars="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/sectionDdayHeader"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/section_dday"
+                    android:textStyle="bold"
+                    android:textColor="@color/purple_700" />
+
+                <LinearLayout
+                    android:id="@+id/ddayContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:id="@+id/sectionTimetableHeader"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/section_timetable"
+                    android:textStyle="bold"
+                    android:textColor="@color/purple_700" />
+
+                <LinearLayout
+                    android:id="@+id/timetableContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:id="@+id/sectionMealHeader"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/section_meal"
+                    android:textStyle="bold"
+                    android:textColor="@color/purple_700" />
+
+                <LinearLayout
+                    android:id="@+id/mealContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:id="@+id/lastUpdatedText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textSize="11sp"
+                    android:textColor="#888888"
+                    android:gravity="end"
+                    android:text="" />
+
+            </LinearLayout>
+        </ScrollView>
 
         <LinearLayout
+            android:id="@+id/timerPanel"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:visibility="gone">
 
             <TextView
-                android:id="@+id/sectionDdayHeader"
+                android:id="@+id/timerDisplayText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="05:00"
+                android:textSize="40sp"
+                android:textStyle="bold"
+                android:textColor="@color/black" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="16dp">
+
+                <Button
+                    android:id="@+id/timerPreset5Button"
+                    style="?android:attr/buttonStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="5분" />
+
+                <Button
+                    android:id="@+id/timerPreset10Button"
+                    style="?android:attr/buttonStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="10분" />
+
+                <Button
+                    android:id="@+id/timerPreset25Button"
+                    style="?android:attr/buttonStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="25분" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/timerStopButton"
+                style="?android:attr/buttonStyleSmall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="@string/section_dday"
-                android:textStyle="bold"
-                android:textColor="@color/purple_700" />
-
-            <LinearLayout
-                android:id="@+id/ddayContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:layout_marginTop="4dp" />
-
-            <TextView
-                android:id="@+id/sectionTimetableHeader"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="@string/section_timetable"
-                android:textStyle="bold"
-                android:textColor="@color/purple_700" />
-
-            <LinearLayout
-                android:id="@+id/timetableContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:layout_marginTop="4dp" />
-
-            <TextView
-                android:id="@+id/sectionMealHeader"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="@string/section_meal"
-                android:textStyle="bold"
-                android:textColor="@color/purple_700" />
-
-            <LinearLayout
-                android:id="@+id/mealContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:layout_marginTop="4dp" />
-
-            <TextView
-                android:id="@+id/lastUpdatedText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:textSize="11sp"
-                android:textColor="#888888"
-                android:gravity="end"
-                android:text="" />
-
+                android:text="정지" />
         </LinearLayout>
-    </ScrollView>
+
+        <FrameLayout
+            android:id="@+id/minigameContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp"
+        android:weightSum="4">
+
+        <ImageButton
+            android:id="@+id/toolCalendarButton"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_tool_calendar"
+            android:contentDescription="@string/tool_calendar" />
+
+        <ImageButton
+            android:id="@+id/toolTimerButton"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_tool_timer"
+            android:contentDescription="@string/tool_timer" />
+
+        <ImageButton
+            android:id="@+id/toolAlarmButton"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_tool_alarm"
+            android:contentDescription="@string/tool_alarm" />
+
+        <ImageButton
+            android:id="@+id/toolMinigameButton"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_tool_game"
+            android:contentDescription="@string/tool_minigame" />
+    </LinearLayout>
 </LinearLayout>

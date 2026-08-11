@@ -9,5 +9,6 @@ data class ManualTimetableEntry(
     /** 1=Monday .. 7=Sunday, matching java.time.DayOfWeek.value */
     val dayOfWeek: Int,
     val period: Int,
-    val subject: String
+    /** References [TimetableSubject.id]. */
+    val subjectId: String
 )

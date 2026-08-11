@@ -4,6 +4,12 @@
     <string name="refresh">새로고침</string>
     <string name="close">닫기</string>
     <string name="section_dday">디데이</string>
-    <string name="section_timetable">오늘의 시간표</string>
-    <string name="section_meal">오늘의 급식</string>
+    <string name="section_timetable">시간표</string>
+    <string name="section_meal">급식</string>
+    <string name="previous_day">이전 날</string>
+    <string name="next_day">다음 날</string>
+    <string name="tool_calendar">달력</string>
+    <string name="tool_timer">타이머</string>
+    <string name="tool_alarm">알람</string>
+    <string name="tool_minigame">미니게임</string>
 </resources>

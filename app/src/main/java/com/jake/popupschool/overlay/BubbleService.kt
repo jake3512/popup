@@ -1,21 +1,27 @@
 package com.jake.popupschool.overlay
 
+import android.app.DatePickerDialog
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.CountDownTimer
 import android.os.IBinder
+import android.provider.AlarmClock
+import android.view.GestureDetector
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
@@ -28,6 +34,7 @@ import com.jake.popupschool.data.remote.NeisClient
 import com.jake.popupschool.data.repository.SchoolDataRepository
 import com.jake.popupschool.data.settings.SettingsRepository
 import com.jake.popupschool.data.timetable.TimetableRepository
+import com.jake.popupschool.data.timetable.TimetableSubjectRepository
 import com.jake.popupschool.domain.model.MealInfo
 import com.jake.popupschool.domain.model.PopupStyle
 import com.jake.popupschool.domain.model.TimetableSlot
@@ -57,7 +64,34 @@ class BubbleService : Service() {
     private lateinit var ddayRepository: DdayRepository
     private lateinit var schoolDataRepository: SchoolDataRepository
     private lateinit var timetableRepository: TimetableRepository
+    private lateinit var timetableSubjectRepository: TimetableSubjectRepository
     private var currentStyle: PopupStyle = PopupStyle.DEFAULT
+
+    private var viewingDate: LocalDate = LocalDate.now()
+    private var countDownTimer: CountDownTimer? = null
+    private val movingClassHighlight = Color.parseColor("#40FFC107")
+
+    private val dayGestureDetector by lazy {
+        GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (e1 == null) return false
+                val dx = e2.x - e1.x
+                val dy = e2.y - e1.y
+                if (abs(dx) > abs(dy) && abs(dx) > 80 && abs(velocityX) > 200) {
+                    if (dx < 0) changeDay(1) else changeDay(-1)
+                    return true
+                }
+                return false
+            }
+        })
+    }
+
+    private enum class ContentMode { NORMAL, TIMER, MINIGAME }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -68,6 +102,7 @@ class BubbleService : Service() {
         ddayRepository = DdayRepository(applicationContext)
         schoolDataRepository = SchoolDataRepository(NeisClient.api)
         timetableRepository = TimetableRepository(applicationContext)
+        timetableSubjectRepository = TimetableSubjectRepository(applicationContext)
 
         NotificationHelper.ensureChannel(this)
         startForegroundWithType(buildNotification())
@@ -195,6 +230,8 @@ class BubbleService : Service() {
         view.findViewById<TextView>(R.id.sectionTimetableHeader).setTextColor(currentStyle.headerTextColor.toInt())
         view.findViewById<TextView>(R.id.sectionMealHeader).setTextColor(currentStyle.headerTextColor.toInt())
         view.findViewById<TextView>(R.id.lastUpdatedText).setTextColor(currentStyle.secondaryTextColor.toInt())
+        view.findViewById<TextView>(R.id.dateLabelText).setTextColor(currentStyle.headerTextColor.toInt())
+        view.findViewById<TextView>(R.id.timerDisplayText).setTextColor(currentStyle.headerTextColor.toInt())
     }
 
     private fun removeBubble() {
@@ -226,49 +263,186 @@ class BubbleService : Service() {
         }
 
         view.findViewById<View>(R.id.closeButton).setOnClickListener { collapse() }
-        view.findViewById<View>(R.id.refreshButton).setOnClickListener { loadData(view) }
+        view.findViewById<View>(R.id.refreshButton).setOnClickListener {
+            loadDday(view)
+            loadTimetableAndMeal(view)
+        }
+        view.findViewById<View>(R.id.prevDayButton).setOnClickListener { changeDay(-1) }
+        view.findViewById<View>(R.id.nextDayButton).setOnClickListener { changeDay(1) }
+        view.findViewById<View>(R.id.contentScrollView).setOnTouchListener { _, event ->
+            dayGestureDetector.onTouchEvent(event)
+            false
+        }
+        setupToolbar(view)
 
         windowManager.addView(view, params)
         popupView = view
         expanded = true
-        loadData(view)
+        viewingDate = LocalDate.now()
+        loadDday(view)
+        loadTimetableAndMeal(view)
     }
 
     private fun collapse() {
+        countDownTimer?.cancel()
+        countDownTimer = null
+        popupView?.findViewById<FrameLayout>(R.id.minigameContainer)?.removeAllViews()
         popupView?.let { runCatching { windowManager.removeView(it) } }
         popupView = null
         expanded = false
         addBubble()
     }
 
-    private fun loadData(view: View) {
-        val ddayContainer = view.findViewById<LinearLayout>(R.id.ddayContainer)
-        val timetableContainer = view.findViewById<LinearLayout>(R.id.timetableContainer)
-        val mealContainer = view.findViewById<LinearLayout>(R.id.mealContainer)
-        val lastUpdatedText = view.findViewById<TextView>(R.id.lastUpdatedText)
+    private fun changeDay(deltaDays: Int) {
+        viewingDate = viewingDate.plusDays(deltaDays.toLong())
+        popupView?.let { loadTimetableAndMeal(it) }
+    }
 
+    private fun formatDateLabel(date: LocalDate): String {
+        val dayNames = arrayOf("월", "화", "수", "목", "금", "토", "일")
+        val dayName = dayNames[date.dayOfWeek.value - 1]
+        val base = "${date.monthValue}월 ${date.dayOfMonth}일 (${dayName})"
+        return if (date == LocalDate.now()) "$base · 오늘" else base
+    }
+
+    // --- Toolbar: calendar / timer / alarm / minigame ---
+
+    private fun setupToolbar(view: View) {
+        view.findViewById<View>(R.id.toolCalendarButton).setOnClickListener { showDatePicker(view) }
+        view.findViewById<View>(R.id.toolTimerButton).setOnClickListener { toggleTimerPanel(view) }
+        view.findViewById<View>(R.id.toolAlarmButton).setOnClickListener { openSystemAlarm() }
+        view.findViewById<View>(R.id.toolMinigameButton).setOnClickListener { toggleMinigame(view) }
+
+        view.findViewById<View>(R.id.timerPreset5Button).setOnClickListener { startTimer(view, 5) }
+        view.findViewById<View>(R.id.timerPreset10Button).setOnClickListener { startTimer(view, 10) }
+        view.findViewById<View>(R.id.timerPreset25Button).setOnClickListener { startTimer(view, 25) }
+        view.findViewById<View>(R.id.timerStopButton).setOnClickListener { stopTimer(view) }
+    }
+
+    private fun showContentMode(view: View, mode: ContentMode) {
+        view.findViewById<View>(R.id.contentScrollView).visibility =
+            if (mode == ContentMode.NORMAL) View.VISIBLE else View.GONE
+        view.findViewById<View>(R.id.timerPanel).visibility =
+            if (mode == ContentMode.TIMER) View.VISIBLE else View.GONE
+        view.findViewById<View>(R.id.minigameContainer).visibility =
+            if (mode == ContentMode.MINIGAME) View.VISIBLE else View.GONE
+    }
+
+    private fun showDatePicker(view: View) {
+        val dialog = DatePickerDialog(
+            this,
+            { _, year, month, dayOfMonth ->
+                viewingDate = LocalDate.of(year, month + 1, dayOfMonth)
+                loadTimetableAndMeal(view)
+            },
+            viewingDate.year,
+            viewingDate.monthValue - 1,
+            viewingDate.dayOfMonth
+        )
+        dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+        dialog.show()
+    }
+
+    private fun toggleTimerPanel(view: View) {
+        val timerPanel = view.findViewById<View>(R.id.timerPanel)
+        if (timerPanel.visibility == View.VISIBLE) {
+            showContentMode(view, ContentMode.NORMAL)
+        } else {
+            stopMinigame(view)
+            showContentMode(view, ContentMode.TIMER)
+        }
+    }
+
+    private fun startTimer(view: View, minutes: Int) {
+        countDownTimer?.cancel()
+        val display = view.findViewById<TextView>(R.id.timerDisplayText)
+        countDownTimer = object : CountDownTimer(minutes * 60_000L, 1000L) {
+            override fun onTick(millisUntilFinished: Long) {
+                val totalSeconds = (millisUntilFinished / 1000).toInt()
+                display.text = "%02d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+            }
+
+            override fun onFinish() {
+                display.text = "00:00"
+            }
+        }.start()
+    }
+
+    private fun stopTimer(view: View) {
+        countDownTimer?.cancel()
+        countDownTimer = null
+        view.findViewById<TextView>(R.id.timerDisplayText).text = "00:00"
+    }
+
+    private fun openSystemAlarm() {
+        val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        runCatching { startActivity(intent) }
+    }
+
+    private fun toggleMinigame(view: View) {
+        val container = view.findViewById<FrameLayout>(R.id.minigameContainer)
+        if (container.visibility == View.VISIBLE) {
+            stopMinigame(view)
+        } else {
+            countDownTimer?.cancel()
+            countDownTimer = null
+            showContentMode(view, ContentMode.MINIGAME)
+            container.removeAllViews()
+            container.addView(
+                SwingHeroView(this),
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+            )
+        }
+    }
+
+    private fun stopMinigame(view: View) {
+        view.findViewById<FrameLayout>(R.id.minigameContainer).removeAllViews()
+        showContentMode(view, ContentMode.NORMAL)
+    }
+
+    // --- Data loading ---
+
+    private fun loadDday(view: View) {
+        val ddayContainer = view.findViewById<LinearLayout>(R.id.ddayContainer)
         serviceScope.launch {
             val settings = settingsRepository.settingsFlow.first()
             currentStyle = settings.popupStyle
             applyPopupStyle(view)
-
             val ddayItems = ddayRepository.itemsFlow.first()
-
             renderDday(ddayContainer, ddayItems)
+        }
+    }
 
-            val today = LocalDate.now()
+    private fun loadTimetableAndMeal(view: View) {
+        val timetableContainer = view.findViewById<LinearLayout>(R.id.timetableContainer)
+        val mealContainer = view.findViewById<LinearLayout>(R.id.mealContainer)
+        val dateLabelText = view.findViewById<TextView>(R.id.dateLabelText)
+        val lastUpdatedText = view.findViewById<TextView>(R.id.lastUpdatedText)
+
+        dateLabelText.text = formatDateLabel(viewingDate)
+        dateLabelText.setTextColor(currentStyle.headerTextColor.toInt())
+
+        serviceScope.launch {
+            val settings = settingsRepository.settingsFlow.first()
+            val date = viewingDate
 
             if (settings.timetableSource == TimetableSource.MANUAL) {
+                val subjects = timetableSubjectRepository.subjectsFlow.first()
                 val slots = timetableRepository.entriesFlow.first()
-                    .filter { it.dayOfWeek == today.dayOfWeek.value }
+                    .filter { it.dayOfWeek == date.dayOfWeek.value }
                     .sortedBy { it.period }
-                    .map { TimetableSlot(period = it.period, subject = it.subject) }
+                    .mapNotNull { entry ->
+                        val subject = subjects.find { it.id == entry.subjectId } ?: return@mapNotNull null
+                        TimetableSlot(period = entry.period, subject = subject.name, isMovingClass = subject.isMovingClass)
+                    }
                 if (slots.isEmpty()) renderMessage(timetableContainer, "등록된 시간표가 없습니다.")
                 else renderTimetable(timetableContainer, slots)
             } else if (settings.isConfigured) {
-                schoolDataRepository.getTimetableForDate(settings, today)
+                schoolDataRepository.getTimetableForDate(settings, date)
                     .onSuccess { slots ->
-                        if (slots.isEmpty()) renderMessage(timetableContainer, "오늘은 시간표가 없습니다.")
+                        if (slots.isEmpty()) renderMessage(timetableContainer, "시간표가 없습니다.")
                         else renderTimetable(timetableContainer, slots)
                     }
                     .onFailure { renderMessage(timetableContainer, "시간표를 불러오지 못했습니다.") }
@@ -277,9 +451,9 @@ class BubbleService : Service() {
             }
 
             if (settings.isConfigured) {
-                schoolDataRepository.getMealsForDate(settings, today)
+                schoolDataRepository.getMealsForDate(settings, date)
                     .onSuccess { meals ->
-                        if (meals.isEmpty()) renderMessage(mealContainer, "오늘은 급식 정보가 없습니다.")
+                        if (meals.isEmpty()) renderMessage(mealContainer, "급식 정보가 없습니다.")
                         else renderMeals(mealContainer, meals)
                     }
                     .onFailure { renderMessage(mealContainer, "급식 정보를 불러오지 못했습니다.") }
@@ -309,12 +483,30 @@ class BubbleService : Service() {
 
     private fun renderTimetable(container: LinearLayout, slots: List<TimetableSlot>) {
         container.removeAllViews()
+        val density = resources.displayMetrics.density
         slots.forEach { slot ->
             val tv = TextView(this)
-            tv.text = "${slot.period}교시  ${slot.subject}"
+            tv.text = if (slot.isMovingClass) {
+                "${slot.period}교시  ${slot.subject} (이동수업)"
+            } else {
+                "${slot.period}교시  ${slot.subject}"
+            }
             tv.textSize = 14f
             tv.setTextColor(currentStyle.bodyTextColor.toInt())
-            tv.setPadding(0, 4, 0, 4)
+            if (slot.isMovingClass) {
+                tv.setTypeface(null, Typeface.BOLD)
+                tv.background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 8f * density
+                    setColor(movingClassHighlight)
+                }
+                val hPad = (8 * density).toInt()
+                val vPad = (4 * density).toInt()
+                tv.setPadding(hPad, vPad, hPad, vPad)
+            } else {
+                tv.background = null
+                tv.setPadding(0, 4, 0, 4)
+            }
             container.addView(tv)
         }
     }
@@ -350,6 +542,7 @@ class BubbleService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        countDownTimer?.cancel()
         removeBubble()
         popupView?.let { runCatching { windowManager.removeView(it) } }
         serviceJob.cancel()
