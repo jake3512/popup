@@ -36,6 +36,7 @@ class SwingHeroView(context: Context) : View(context) {
     private var swinging = false
     private var swingAnchorX = 0f
     private var swingAnchorY = 0f
+    private var pointerDown = false
 
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = 16
@@ -66,24 +67,24 @@ class SwingHeroView(context: Context) : View(context) {
         if (posX - radius < 0f) {
             posX = radius
             velocityX = abs(velocityX)
-            swinging = false
+            if (!pointerDown) swinging = false
         } else if (posX + radius > w) {
             posX = w - radius
             velocityX = -abs(velocityX)
-            swinging = false
+            if (!pointerDown) swinging = false
         }
 
         if (posY - radius < 0f) {
             posY = radius
             velocityY = abs(velocityY)
-            swinging = false
+            if (!pointerDown) swinging = false
         } else if (posY + radius > h) {
             posY = h - radius
             velocityY = -abs(velocityY) * FLOOR_DAMPING
-            swinging = false
+            if (!pointerDown) swinging = false
         }
 
-        if (swinging && hypot(posX - swingAnchorX, posY - swingAnchorY) < radius * 1.5f) {
+        if (!pointerDown && swinging && hypot(posX - swingAnchorX, posY - swingAnchorY) < radius * 1.5f) {
             swinging = false
         }
 
@@ -91,9 +92,26 @@ class SwingHeroView(context: Context) : View(context) {
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_DOWN) {
-            shootWebTo(event.x, event.y)
-            return true
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                pointerDown = true
+                shootWebTo(event.x, event.y)
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (pointerDown) {
+                    // Web stays attached to the finger while held down; the hero keeps
+                    // its existing momentum, only the drawn anchor point follows the touch.
+                    swingAnchorX = event.x
+                    swingAnchorY = event.y
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                pointerDown = false
+                swinging = false
+                return true
+            }
         }
         return super.onTouchEvent(event)
     }

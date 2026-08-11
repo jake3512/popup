@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
@@ -32,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.jake.popupschool.data.study.StudyTimeRepository
 import java.time.LocalDate
@@ -52,7 +55,12 @@ fun StudyCalendarScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("공부시간 달력") }) }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
             TextButton(onClick = onBack) { Text("뒤로") }
 
             Row(
@@ -97,7 +105,7 @@ fun StudyCalendarScreen(onBack: () -> Unit) {
                     Row(modifier = Modifier.fillMaxWidth()) {
                         for (col in 0 until 7) {
                             val dayNum = row * 7 + col - leadingBlanks + 1
-                            Box(modifier = Modifier.weight(1f).aspectRatio(0.85f).padding(2.dp)) {
+                            Box(modifier = Modifier.weight(1f).aspectRatio(1f).padding(2.dp)) {
                                 if (dayNum in 1..daysInMonth) {
                                     val date = displayedMonth.atDay(dayNum)
                                     StudyDayCell(
@@ -131,14 +139,17 @@ private fun StudyDayCell(day: Int, seconds: Long, isToday: Boolean) {
             Text(
                 day.toString(),
                 style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
+                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1
             )
             if (seconds > 0) {
                 Text(
                     formatStudyDuration(seconds),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -148,5 +159,5 @@ private fun StudyDayCell(day: Int, seconds: Long, isToday: Boolean) {
 private fun formatStudyDuration(seconds: Long): String {
     val h = seconds / 3600
     val m = (seconds % 3600) / 60
-    return if (h > 0) "${h}시간${m}분" else "${m}분"
+    return "%d:%02d".format(h, m)
 }

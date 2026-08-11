@@ -354,6 +354,28 @@ class BubbleService : Service() {
         if (expanded) collapse() else expand()
     }
 
+    /** Sizes the popup card and its content area relative to the current screen, so it neither
+     *  overflows small phones nor looks tiny on large ones. */
+    private fun applyResponsiveSize(view: View) {
+        val displayMetrics = resources.displayMetrics
+        val density = displayMetrics.density
+        val screenWidthDp = displayMetrics.widthPixels / density
+        val screenHeightDp = displayMetrics.heightPixels / density
+
+        val popupWidthDp = (screenWidthDp * 0.82f).coerceIn(240f, 340f)
+        val contentHeightDp = (screenHeightDp * 0.5f).coerceIn(260f, 420f)
+
+        view.layoutParams = LinearLayout.LayoutParams(
+            (popupWidthDp * density).toInt(),
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+
+        val contentFrame = view.findViewById<View>(R.id.popupContentFrame)
+        val frameParams = contentFrame.layoutParams
+        frameParams.height = (contentHeightDp * density).toInt()
+        contentFrame.layoutParams = frameParams
+    }
+
     private fun expand() {
         if (popupView != null) return
         val bubbleX = bubbleParams.x
@@ -361,6 +383,7 @@ class BubbleService : Service() {
         removeBubble()
 
         val view = LayoutInflater.from(this).inflate(R.layout.view_popup, null)
+        applyResponsiveSize(view)
         popupParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
