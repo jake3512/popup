@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.jake.popupschool.domain.model.BubbleIconType
 import com.jake.popupschool.domain.model.PopupStyle
 import com.jake.popupschool.domain.model.SchoolLevel
 import com.jake.popupschool.domain.model.TimetableSource
@@ -32,6 +33,8 @@ class SettingsRepository(private val context: Context) {
         val CLASS_NUM = stringPreferencesKey("class_num")
         val TIMETABLE_SOURCE = stringPreferencesKey("timetable_source")
         val POPUP_STYLE = stringPreferencesKey("popup_style")
+        val BUBBLE_ICON_TYPE = stringPreferencesKey("bubble_icon_type")
+        val BUBBLE_ICON_TEXT = stringPreferencesKey("bubble_icon_text")
     }
 
     val settingsFlow: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -50,7 +53,11 @@ class SettingsRepository(private val context: Context) {
             } ?: TimetableSource.NEIS,
             popupStyle = prefs[Keys.POPUP_STYLE]?.let { name ->
                 runCatching { PopupStyle.valueOf(name) }.getOrNull()
-            } ?: PopupStyle.DEFAULT
+            } ?: PopupStyle.DEFAULT,
+            bubbleIconType = prefs[Keys.BUBBLE_ICON_TYPE]?.let { name ->
+                runCatching { BubbleIconType.valueOf(name) }.getOrNull()
+            } ?: BubbleIconType.DEFAULT,
+            bubbleIconText = prefs[Keys.BUBBLE_ICON_TEXT].orEmpty()
         )
     }
 
@@ -79,6 +86,13 @@ class SettingsRepository(private val context: Context) {
     suspend fun setPopupStyle(style: PopupStyle) {
         context.settingsDataStore.edit { prefs ->
             prefs[Keys.POPUP_STYLE] = style.name
+        }
+    }
+
+    suspend fun setBubbleIcon(type: BubbleIconType, text: String) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.BUBBLE_ICON_TYPE] = type.name
+            prefs[Keys.BUBBLE_ICON_TEXT] = text
         }
     }
 }

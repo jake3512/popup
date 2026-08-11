@@ -7,7 +7,11 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -21,8 +25,10 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
@@ -37,16 +43,19 @@ import com.jake.popupschool.data.settings.SettingsRepository
 import com.jake.popupschool.data.study.StudyTimeRepository
 import com.jake.popupschool.data.timetable.TimetableRepository
 import com.jake.popupschool.data.timetable.TimetableSubjectRepository
+import com.jake.popupschool.domain.model.BubbleIconType
 import com.jake.popupschool.domain.model.MealInfo
 import com.jake.popupschool.domain.model.PopupStyle
 import com.jake.popupschool.domain.model.TimetableSlot
 import com.jake.popupschool.domain.model.TimetableSource
+import com.jake.popupschool.util.bubbleIconImageFile
 import com.jake.popupschool.util.ddayLabel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.math.abs
@@ -70,6 +79,8 @@ class BubbleService : Service() {
     private lateinit var timetableSubjectRepository: TimetableSubjectRepository
     private lateinit var studyTimeRepository: StudyTimeRepository
     private var currentStyle: PopupStyle = PopupStyle.DEFAULT
+    private var bubbleIconType: BubbleIconType = BubbleIconType.DEFAULT
+    private var bubbleIconText: String = ""
 
     private var viewingDate: LocalDate = LocalDate.now()
     private var countDownTimer: CountDownTimer? = null
@@ -131,8 +142,12 @@ class BubbleService : Service() {
         addBubble()
 
         serviceScope.launch {
-            currentStyle = settingsRepository.settingsFlow.first().popupStyle
-            applyBubbleStyle()
+            settingsRepository.settingsFlow.collect { settings ->
+                currentStyle = settings.popupStyle
+                bubbleIconType = settings.bubbleIconType
+                bubbleIconText = settings.bubbleIconText
+                applyBubbleStyle()
+            }
         }
     }
 
@@ -230,14 +245,86 @@ class BubbleService : Service() {
     }
 
     private fun applyBubbleStyle() {
-        val icon = bubbleView?.findViewById<View>(R.id.bubbleIcon) ?: return
+        val icon = bubbleView?.findViewById<ImageView>(R.id.bubbleIcon) ?: return
         val density = resources.displayMetrics.density
         icon.background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(currentStyle.bubbleColor.toInt())
             setStroke((2 * density).toInt(), currentStyle.borderColor.toInt())
         }
+        icon.clipToOutline = true
+        icon.outlineProvider = ViewOutlineProvider.BACKGROUND
+        icon.invalidateOutline()
+        renderBubbleIcon(icon, density)
     }
+
+    /** Renders the user's chosen bubble icon (default artwork, custom text/emoji, or a gallery photo). */
+    private fun renderBubbleIcon(icon: ImageView, density: Float) {
+        val sizePx = (56 * density).toInt()
+        when (bubbleIconType) {
+            BubbleIconType.IMAGE -> {
+                val bitmap = decodeSampledBitmap(bubbleIconImageFile(applicationContext), sizePx)
+                if (bitmap != null) {
+                    icon.scaleType = ImageView.ScaleType.CENTER_CROP
+                    icon.setPadding(0, 0, 0, 0)
+                    icon.setImageBitmap(bitmap)
+                } else {
+                    renderDefaultBubbleIcon(icon, density)
+                }
+            }
+            BubbleIconType.TEXT -> {
+                if (bubbleIconText.isBlank()) {
+                    renderDefaultBubbleIcon(icon, density)
+                } else {
+                    icon.scaleType = ImageView.ScaleType.CENTER_INSIDE
+                    icon.setPadding(0, 0, 0, 0)
+                    icon.setImageBitmap(createTextIconBitmap(bubbleIconText, sizePx))
+                }
+            }
+            BubbleIconType.DEFAULT -> renderDefaultBubbleIcon(icon, density)
+        }
+    }
+
+    private fun renderDefaultBubbleIcon(icon: ImageView, density: Float) {
+        icon.scaleType = ImageView.ScaleType.CENTER_INSIDE
+        val pad = (14 * density).toInt()
+        icon.setPadding(pad, pad, pad, pad)
+        icon.setImageResource(R.drawable.ic_bubble)
+    }
+
+    private fun createTextIconBitmap(text: String, sizePx: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val glyphCount = text.codePointCount(0, text.length).coerceAtLeast(1)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textAlign = Paint.Align.CENTER
+            textSize = sizePx * when {
+                glyphCount <= 1 -> 0.55f
+                glyphCount <= 2 -> 0.4f
+                else -> 0.3f
+            }
+        }
+        val fontMetrics = paint.fontMetrics
+        val textY = sizePx / 2f - (fontMetrics.ascent + fontMetrics.descent) / 2f
+        canvas.drawText(text, sizePx / 2f, textY, paint)
+        return bitmap
+    }
+
+    /** Decodes [file] downsampled to roughly [targetSizePx] to avoid loading a full-resolution gallery photo into memory. */
+    private fun decodeSampledBitmap(file: File, targetSizePx: Int): Bitmap? = runCatching {
+        if (!file.exists()) return null
+        val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, boundsOptions)
+        var sampleSize = 1
+        while (boundsOptions.outWidth / (sampleSize * 2) >= targetSizePx &&
+            boundsOptions.outHeight / (sampleSize * 2) >= targetSizePx
+        ) {
+            sampleSize *= 2
+        }
+        val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
+    }.getOrNull()
 
     private fun applyPopupStyle(view: View) {
         val density = resources.displayMetrics.density
