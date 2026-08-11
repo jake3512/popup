@@ -15,6 +15,7 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.CountDownTimer
 import android.os.Handler
@@ -546,8 +547,10 @@ class BubbleService : Service() {
 
     private fun updateTimerDisplay(view: View) {
         val seconds = timerRemainingSeconds.coerceAtLeast(0)
-        view.findViewById<TextView>(R.id.timerDisplayText).text =
-            "%02d:%02d".format(seconds / 60, seconds % 60)
+        view.findViewById<TextView>(R.id.timerDisplayText).apply {
+            text = "%02d:%02d".format(seconds / 60, seconds % 60)
+            setTextColor(currentStyle.headerTextColor.toInt())
+        }
     }
 
     private fun updateTimerButtons(view: View) {
@@ -589,10 +592,22 @@ class BubbleService : Service() {
             override fun onFinish() {
                 timerRemainingSeconds = 0
                 timerRunning = false
-                updateTimerDisplay(view)
+                view.findViewById<TextView>(R.id.timerDisplayText).apply {
+                    text = "완료!"
+                    setTextColor(Color.parseColor("#E53935"))
+                }
                 updateTimerButtons(view)
+                playTimerFinishedSound()
             }
         }.start()
+    }
+
+    private fun playTimerFinishedSound() {
+        runCatching {
+            val uri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            RingtoneManager.getRingtone(this, uri)?.play()
+        }
     }
 
     private fun resetTimer(view: View) {
