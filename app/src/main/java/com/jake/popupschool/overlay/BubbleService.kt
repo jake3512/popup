@@ -448,8 +448,6 @@ class BubbleService : Service() {
     }
 
     private fun collapse() {
-        cancelTimer()
-        cancelStopwatch()
         popupView?.findViewById<FrameLayout>(R.id.minigameContainer)?.removeAllViews()
         popupView?.let { runCatching { windowManager.removeView(it) } }
         popupView = null
@@ -499,7 +497,7 @@ class BubbleService : Service() {
             if (mode == ContentMode.MINIGAME) View.VISIBLE else View.GONE
     }
 
-    /** Tears down whichever tool panel isn't [mode] and shows [mode]. Toggling the active mode's own tool returns to NORMAL. */
+    /** Shows [mode]'s panel; toggling the active mode's own tool returns to NORMAL. */
     private fun toggleMode(view: View, mode: ContentMode) {
         val currentlyActive = view.findViewById<View>(
             when (mode) {
@@ -512,9 +510,9 @@ class BubbleService : Service() {
         enterMode(view, if (currentlyActive) ContentMode.NORMAL else mode)
     }
 
+    /** Switches the visible tool panel without disturbing the timer/stopwatch, which keep
+     *  running in the background (via [popupView]) even while their panel is hidden. */
     private fun enterMode(view: View, mode: ContentMode) {
-        if (mode != ContentMode.TIMER) resetTimer(view)
-        if (mode != ContentMode.STOPWATCH) resetStopwatch(view)
         val minigameContainer = view.findViewById<FrameLayout>(R.id.minigameContainer)
         if (mode != ContentMode.MINIGAME) {
             minigameContainer.removeAllViews()
@@ -524,6 +522,14 @@ class BubbleService : Service() {
                 SwingHeroView(this),
                 FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
             )
+        }
+        if (mode == ContentMode.TIMER) {
+            updateTimerDisplay(view)
+            updateTimerButtons(view)
+        }
+        if (mode == ContentMode.STOPWATCH) {
+            updateStopwatchDisplay(view)
+            updateStopwatchButtons(view)
         }
         showContentMode(view, mode)
     }
@@ -563,14 +569,14 @@ class BubbleService : Service() {
         timerRemainingSeconds = (timerRemainingSeconds + deltaSeconds).coerceAtLeast(0)
         updateTimerDisplay(view)
         if (timerRunning) {
-            runCountdown(view)
+            runCountdown()
         }
     }
 
     private fun startTimerCountdown(view: View) {
         if (timerRemainingSeconds <= 0) return
         timerRunning = true
-        runCountdown(view)
+        runCountdown()
         updateTimerButtons(view)
     }
 
@@ -581,22 +587,25 @@ class BubbleService : Service() {
         updateTimerButtons(view)
     }
 
-    private fun runCountdown(view: View) {
+    /** Runs independent of the popup view so the countdown keeps going while the panel is hidden or the popup is collapsed. */
+    private fun runCountdown() {
         countDownTimer?.cancel()
         countDownTimer = object : CountDownTimer(timerRemainingSeconds * 1000L, 1000L) {
             override fun onTick(millisUntilFinished: Long) {
                 timerRemainingSeconds = millisUntilFinished / 1000
-                updateTimerDisplay(view)
+                popupView?.let { updateTimerDisplay(it) }
             }
 
             override fun onFinish() {
                 timerRemainingSeconds = 0
                 timerRunning = false
-                view.findViewById<TextView>(R.id.timerDisplayText).apply {
-                    text = "완료!"
-                    setTextColor(Color.parseColor("#E53935"))
+                popupView?.let { view ->
+                    view.findViewById<TextView>(R.id.timerDisplayText).apply {
+                        text = "완료!"
+                        setTextColor(Color.parseColor("#E53935"))
+                    }
+                    updateTimerButtons(view)
                 }
-                updateTimerButtons(view)
                 playTimerFinishedSound()
             }
         }.start()
@@ -643,7 +652,7 @@ class BubbleService : Service() {
         val runnable = object : Runnable {
             override fun run() {
                 stopwatchSeconds++
-                updateStopwatchDisplay(view)
+                popupView?.let { updateStopwatchDisplay(it) }
                 stopwatchHandler.postDelayed(this, 1000)
             }
         }
