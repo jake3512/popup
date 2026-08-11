@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -228,6 +229,12 @@ fun HomeScreen(navController: NavHostController) {
                 title = "시간표 설정",
                 subtitle = "자동 조회 또는 직접 입력",
                 onClick = { navController.navigate("timetable") }
+            )
+            QuickAccessItem(
+                icon = Icons.Filled.Palette,
+                title = "팝업 스타일",
+                subtitle = "프리미엄 · 미니멀 · 다크 · 파스텔",
+                onClick = { navController.navigate("popup_style") }
             )
         }
     }

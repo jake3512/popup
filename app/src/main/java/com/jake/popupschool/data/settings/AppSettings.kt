@@ -1,5 +1,6 @@
 package com.jake.popupschool.data.settings
 
+import com.jake.popupschool.domain.model.PopupStyle
 import com.jake.popupschool.domain.model.SchoolLevel
 import com.jake.popupschool.domain.model.TimetableSource
 
@@ -11,7 +12,8 @@ data class AppSettings(
     val schoolLevel: SchoolLevel = SchoolLevel.HIGH,
     val grade: String = "",
     val classNum: String = "",
-    val timetableSource: TimetableSource = TimetableSource.NEIS
+    val timetableSource: TimetableSource = TimetableSource.NEIS,
+    val popupStyle: PopupStyle = PopupStyle.DEFAULT
 ) {
     val isConfigured: Boolean
         get() = apiKey.isNotBlank() && officeCode.isNotBlank() && schoolCode.isNotBlank() &&

@@ -14,6 +14,7 @@ import androidx.navigation.compose.rememberNavController
 import com.jake.popupschool.ui.dday.DdayScreen
 import com.jake.popupschool.ui.home.HomeScreen
 import com.jake.popupschool.ui.settings.SettingsScreen
+import com.jake.popupschool.ui.style.PopupStyleScreen
 import com.jake.popupschool.ui.theme.PopupSchoolTheme
 import com.jake.popupschool.ui.timetable.TimetableScreen
 
@@ -38,5 +39,6 @@ private fun PopupSchoolApp() {
         composable("settings") { SettingsScreen(onBack = { navController.popBackStack() }) }
         composable("dday") { DdayScreen(onBack = { navController.popBackStack() }) }
         composable("timetable") { TimetableScreen(onBack = { navController.popBackStack() }) }
+        composable("popup_style") { PopupStyleScreen(onBack = { navController.popBackStack() }) }
     }
 }

@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
@@ -28,6 +29,7 @@ import com.jake.popupschool.data.repository.SchoolDataRepository
 import com.jake.popupschool.data.settings.SettingsRepository
 import com.jake.popupschool.data.timetable.TimetableRepository
 import com.jake.popupschool.domain.model.MealInfo
+import com.jake.popupschool.domain.model.PopupStyle
 import com.jake.popupschool.domain.model.TimetableSlot
 import com.jake.popupschool.domain.model.TimetableSource
 import com.jake.popupschool.util.ddayLabel
@@ -55,6 +57,7 @@ class BubbleService : Service() {
     private lateinit var ddayRepository: DdayRepository
     private lateinit var schoolDataRepository: SchoolDataRepository
     private lateinit var timetableRepository: TimetableRepository
+    private var currentStyle: PopupStyle = PopupStyle.DEFAULT
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -69,6 +72,11 @@ class BubbleService : Service() {
         NotificationHelper.ensureChannel(this)
         startForegroundWithType(buildNotification())
         addBubble()
+
+        serviceScope.launch {
+            currentStyle = settingsRepository.settingsFlow.first().popupStyle
+            applyBubbleStyle()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -161,6 +169,32 @@ class BubbleService : Service() {
 
         windowManager.addView(view, bubbleParams)
         bubbleView = view
+        applyBubbleStyle()
+    }
+
+    private fun applyBubbleStyle() {
+        val icon = bubbleView?.findViewById<View>(R.id.bubbleIcon) ?: return
+        val density = resources.displayMetrics.density
+        icon.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(currentStyle.bubbleColor.toInt())
+            setStroke((2 * density).toInt(), currentStyle.borderColor.toInt())
+        }
+    }
+
+    private fun applyPopupStyle(view: View) {
+        val density = resources.displayMetrics.density
+        view.findViewById<View>(R.id.popupRoot).background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = currentStyle.cornerRadiusDp * density
+            setColor(currentStyle.backgroundColor.toInt())
+            setStroke((1 * density).toInt(), currentStyle.borderColor.toInt())
+        }
+        view.findViewById<TextView>(R.id.popupTitle).setTextColor(currentStyle.headerTextColor.toInt())
+        view.findViewById<TextView>(R.id.sectionDdayHeader).setTextColor(currentStyle.headerTextColor.toInt())
+        view.findViewById<TextView>(R.id.sectionTimetableHeader).setTextColor(currentStyle.headerTextColor.toInt())
+        view.findViewById<TextView>(R.id.sectionMealHeader).setTextColor(currentStyle.headerTextColor.toInt())
+        view.findViewById<TextView>(R.id.lastUpdatedText).setTextColor(currentStyle.secondaryTextColor.toInt())
     }
 
     private fun removeBubble() {
@@ -215,6 +249,9 @@ class BubbleService : Service() {
 
         serviceScope.launch {
             val settings = settingsRepository.settingsFlow.first()
+            currentStyle = settings.popupStyle
+            applyPopupStyle(view)
+
             val ddayItems = ddayRepository.itemsFlow.first()
 
             renderDday(ddayContainer, ddayItems)
@@ -264,6 +301,7 @@ class BubbleService : Service() {
             val tv = TextView(this)
             tv.text = "${item.title}  ${ddayLabel(item.targetDate())}"
             tv.textSize = 14f
+            tv.setTextColor(currentStyle.bodyTextColor.toInt())
             tv.setPadding(0, 4, 0, 4)
             container.addView(tv)
         }
@@ -275,6 +313,7 @@ class BubbleService : Service() {
             val tv = TextView(this)
             tv.text = "${slot.period}교시  ${slot.subject}"
             tv.textSize = 14f
+            tv.setTextColor(currentStyle.bodyTextColor.toInt())
             tv.setPadding(0, 4, 0, 4)
             container.addView(tv)
         }
@@ -286,6 +325,7 @@ class BubbleService : Service() {
             val header = TextView(this)
             header.text = meal.mealType
             header.textSize = 14f
+            header.setTextColor(currentStyle.headerTextColor.toInt())
             header.setPadding(0, 4, 0, 0)
             header.setTypeface(null, Typeface.BOLD)
             container.addView(header)
@@ -293,6 +333,7 @@ class BubbleService : Service() {
             val body = TextView(this)
             body.text = meal.menuItems.joinToString("\n")
             body.textSize = 13f
+            body.setTextColor(currentStyle.bodyTextColor.toInt())
             body.setPadding(0, 2, 0, 4)
             container.addView(body)
         }
@@ -303,7 +344,7 @@ class BubbleService : Service() {
         val tv = TextView(this)
         tv.text = message
         tv.textSize = 13f
-        tv.setTextColor(0xFF888888.toInt())
+        tv.setTextColor(currentStyle.secondaryTextColor.toInt())
         container.addView(tv)
     }
 

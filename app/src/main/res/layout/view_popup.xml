@@ -53,6 +53,7 @@
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/sectionDdayHeader"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
@@ -68,6 +69,7 @@
                 android:layout_marginTop="4dp" />
 
             <TextView
+                android:id="@+id/sectionTimetableHeader"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
@@ -83,6 +85,7 @@
                 android:layout_marginTop="4dp" />
 
             <TextView
+                android:id="@+id/sectionMealHeader"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
